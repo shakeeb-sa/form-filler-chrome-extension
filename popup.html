@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Form Filler</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; width: 320px; padding: 10px 15px; }
+        h3, h4 { margin: 10px 0; }
+        div { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
+        input[type="text"], input[type="email"], input[type="password"], input[type="tel"] { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; cursor: pointer; margin-top: 10px; border-radius: 4px; font-weight: 600; }
+        #status { text-align: center; color: #28a745; font-weight: bold; height: 15px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        /* New Profile Selector Styles */
+        .profile-selector { border: 1px solid #ddd; border-radius: 6px; padding: 5px 15px 10px 15px; margin-bottom: 15px; }
+        .profile-options { display: flex; justify-content: space-between; }
+        .profile-options label { font-weight: normal; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h3>Smart Filler</h3>
+
+    <!-- NEW PROFILE SELECTOR -->
+    <div class="profile-selector">
+        <h4>Active Profile</h4>
+        <div class="profile-options">
+            <label><input type="radio" name="profile" value="profile1" checked> Profile 1</label>
+            <label><input type="radio" name="profile" value="profile2"> Profile 2</label>
+            <label><input type="radio" name="profile" value="profile3"> Profile 3</label>
+        </div>
+    </div>
+
+    <div id="status"></div>
+    <!-- The rest of the form fields are the same -->
+    <div>
+        <label for="username">Username</label>
+        <input type="text" id="username">
+    </div>
+    <div>
+        <label for="email">Email</label>
+        <input type="email" id="email">
+    </div>
+    <div>
+        <label for="password">Password</label>
+        <input type="password" id="password">
+    </div>
+    <hr>
+    <div>
+        <label for="firstName">First Name</label>
+        <input type="text" id="firstName">
+    </div>
+    <div>
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName">
+    </div>
+    <div>
+        <label for="company">Company</label>
+        <input type="text" id="company">
+    </div>
+    <hr>
+    <div>
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone">
+    </div>
+    <div>
+        <label for="address">Address / Street</label>
+        <input type="text" id="address">
+    </div>
+    <div class="grid">
+        <div>
+            <label for="city">City</label>
+            <input type="text" id="city">
+        </div>
+        <div>
+            <label for="zip">Zip / Postal Code</label>
+            <input type="text" id="zip">
+        </div>
+    </div>
+    <div>
+        <label for="region">Region / State</label>
+        <input type="text" id="region">
+    </div>
+
+    <button id="saveButton">Save to Active Profile</button>
+    <script src="popup.js"></script>
+</body>
+</html>
