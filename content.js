@@ -1,4 +1,4 @@
-// ⚡ LIGHTNING LINKBUILDER — GOD-TIER FINAL v14
+// ⚡ LIGHTNING LINKBUILDER — GOD-TIER FINAL v17
 // First Name + Last Name + Everything = 100% PERFECT
 
 let suggestionBox = null;
@@ -114,6 +114,7 @@ function smartFill(el, value) {
   el.value = value;
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.blur(); 
 }
 
 // PERFECT FIELD DETECTION — NO CONFLICTS EVER
@@ -150,13 +151,16 @@ function getFieldType(el) {
     return 'address';
   }
 
-  // 8. NAME FIELDS — FIXED & PERFECT
+  // 8. NAME FIELDS
   if (/name|person|contact/i.test(str)) {
     if (/first|given|fname|forename/i.test(str)) return 'firstName';
     if (/last|surname|lname|family|second/i.test(str)) return 'lastName';
-    if (/full.?name/i.test(str)) return 'firstName'; // we'll fill first name, last name separately in autofill
-    return 'firstName'; // default to first name
+    if (/full.?name/i.test(str)) return 'firstName';
+    return 'firstName'; 
   }
+
+  // 9. TITLE / HEADLINE
+  if (/title|headline|subject|topic|job.?title|post.?title/i.test(str)) return 'title';
 
   return 'unknown';
 }
@@ -191,7 +195,7 @@ document.addEventListener('click', async e => {
         smartFill(el, data[type]);
         filled++;
       }
-      // Special: if field says "full name", fill both first + last
+      // Special: Full Name handling
       else if (type === 'unknown' && /full.?name/i.test(el.placeholder || el.name || '')) {
         const full = `${data.firstName || ''} ${data.lastName || ''}`.trim();
         if (full) {
@@ -201,14 +205,10 @@ document.addEventListener('click', async e => {
       }
     });
 
-    // Auto-check consent boxes
+    // 2. CHECK BOXES
     document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       if (cb.disabled || cb.checked) return;
-
-      const label = (cb.closest('label')?.textContent || 
-                    cb.parentElement?.textContent || 
-                    cb.getAttribute('aria-label') || '').toLowerCase();
-
+      const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
       if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
         cb.checked = true;
         cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -216,11 +216,11 @@ document.addEventListener('click', async e => {
       }
     });
 
-    toast(`⚡ Filled ${filled} fields + Checked ${checked} boxes → Ready to submit!`);
+    toast(`⚡ Filled ${filled} fields + Checked ${checked} boxes!`);
   }
 }, true);
 
-// Click any field → Choose any saved value
+// MANUAL CLICK MENU
 document.addEventListener('focusin', async e => {
   const input = e.target;
   if (!['INPUT','TEXTAREA','SELECT'].includes(input.tagName)) return;
@@ -241,6 +241,7 @@ document.addEventListener('focusin', async e => {
     {key: 'username', label: 'Username'},
     {key: 'website', label: 'Website URL'},
     {key: 'company', label: 'Company / Site'},
+    {key: 'title', label: 'Title / Subject'},
     {key: 'phone', label: 'Phone'},
     {key: 'address', label: 'Address'},
     {key: 'password', label: 'Password'}
@@ -248,7 +249,9 @@ document.addEventListener('focusin', async e => {
 
   fields.forEach(f => {
     if (!data[f.key]) return;
-    const display = f.key === 'password' ? '••••••••' : data[f.key];
+    
+    let display = data[f.key];
+    if (f.key === 'password') display = '••••••••';
 
     const item = document.createElement('div');
     item.className = 'llb-item';
@@ -261,10 +264,9 @@ document.addEventListener('focusin', async e => {
     suggestionBox.appendChild(item);
   });
 
-  // Reminder
   const reminder = document.createElement('div');
   reminder.className = 'llb-item';
-  reminder.innerHTML = `<strong>4 clicks anywhere = Fill All + Check Boxes</strong>`;
+  reminder.innerHTML = `<strong>4 clicks anywhere = Fill All</strong>`;
   reminder.style.background = '#e8f5e8';
   reminder.style.fontWeight = 'bold';
   suggestionBox.appendChild(reminder);
@@ -276,7 +278,6 @@ document.addEventListener('focusin', async e => {
   suggestionBox.style.left = `${window.scrollX + rect.left}px`;
 });
 
-// Hide box
 document.addEventListener('click', e => {
   if (suggestionBox && !suggestionBox.contains(e.target) && !['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
     suggestionBox.remove();
