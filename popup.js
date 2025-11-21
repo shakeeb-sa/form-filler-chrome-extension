@@ -1,8 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const status = document.getElementById('status');
-    const formFields = [
+        const formFields = [
         'username', 'email', 'password', 'firstName', 'lastName',
-        'company', 'title', 'phone', 'address', 'city', 'zip', 'region'
+        'website', 'company', 'title', 'phone', 'address', 'city', 'zip', 'region'
     ];
     
     const profileRadios = document.querySelectorAll('input[name="profile"]');

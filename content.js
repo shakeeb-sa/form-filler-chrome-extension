@@ -1,5 +1,5 @@
-// ⚡ LIGHTNING LINKBUILDER — GOD-TIER FINAL v17
-// First Name + Last Name + Everything = 100% PERFECT
+// ⚡ LIGHTNING LINKBUILDER — GOD-TIER FINAL v20
+// HYBRID MODE: Real Data (Priority) + Fake Data (Fallback) + Smart Selects
 
 let suggestionBox = null;
 
@@ -13,30 +13,17 @@ style.textContent = `
     box-shadow: 0 14px 45px rgba(0, 0, 0, 0.35);
     font-family: -apple-system, system-ui, sans-serif;
     min-width: 350px;
-    max-height: 70vh;           /* This makes it scrollable */
-    overflow-y: auto;           /* This enables vertical scroll */
+    max-height: 70vh;
+    overflow-y: auto;
     overflow-x: hidden;
     border: 1px solid #ccc;
-    scrollbar-width: thin;      /* Firefox */
+    scrollbar-width: thin;
     scrollbar-color: #0066cc #f0f0f0;
   }
-
-  /* Beautiful custom scrollbar for Chrome/Edge/Safari */
-  .llb-suggestion::-webkit-scrollbar {
-    width: 8px;
-  }
-  .llb-suggestion::-webkit-scrollbar-track {
-    background: #f0f0f0;
-    border-radius: 10px;
-  }
-  .llb-suggestion::-webkit-scrollbar-thumb {
-    background: #0066cc;
-    border-radius: 10px;
-    border: 2px solid #f0f0f0;
-  }
-  .llb-suggestion::-webkit-scrollbar-thumb:hover {
-    background: #0052aa;
-  }
+  .llb-suggestion::-webkit-scrollbar { width: 8px; }
+  .llb-suggestion::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 10px; }
+  .llb-suggestion::-webkit-scrollbar-thumb { background: #0066cc; border-radius: 10px; border: 2px solid #f0f0f0; }
+  .llb-suggestion::-webkit-scrollbar-thumb:hover { background: #0052aa; }
 
   .llb-header {
     background: linear-gradient(90deg, #0066ff, #00ccff);
@@ -117,58 +104,100 @@ function smartFill(el, value) {
   el.blur(); 
 }
 
-// PERFECT FIELD DETECTION — NO CONFLICTS EVER
+// --- FAKE DATA ENGINE ---
+function generateFake(type) {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  
+  // --- EXISTING FAKE DATA LISTS ---
+  const cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"];
+  const streets = ["Main St", "Oak Ave", "Maple Dr", "Cedar Ln", "Park Blvd"];
+  const companies = ["TechCorp", "Global Solutions", "Alpha Agency", "NextGen Media"];
+  const titles = ["Marketing Director", "Content Manager", "SEO Specialist", "Owner"];
+  const subjects = ["Inquiry regarding your website", "Collaboration Proposal", "Partnership Opportunity"];
+
+  // --- YOUR SPECIFIC HARDCODED VALUES ---
+  if (type === 'dob') return "11/11/2000";
+  if (type === 'gender') return "male";
+  if (type === 'language') return "English";
+  if (type === 'timezone') return "Eastern Time (US & Canada)"; 
+  if (type === 'fax') return "222-211-2911";
+  if (type === 'secondaryEmail') return "info@gmail.com";
+  if (type === 'price') return "10";
+  if (type === 'social') return pick(["https://twitter.com/user", "https://linkedin.com/in/user", "https://facebook.com/user"]);
+  if (type === 'companySize') return pick(["1-10", "11-50", "50-200"]);
+  
+  // Standard Fields
+  if (type === 'city') return pick(cities);
+  if (type === 'address') return `${Math.floor(Math.random() * 9000) + 100} ${pick(streets)}`;
+  if (type === 'billing' || type === 'shipping') return "United States"; 
+  if (type === 'zip') return Math.floor(Math.random() * 90000) + 10000;
+  if (type === 'region') return pick(["CA", "NY", "TX", "FL", "IL"]);
+  if (type === 'country') return "United States";
+  if (type === 'phone') return `+1 ${Math.floor(Math.random() * 800) + 200}-${Math.floor(Math.random() * 800) + 200}-${Math.floor(Math.random() * 8999) + 1000}`;
+  if (type === 'company') return pick(companies);
+  if (type === 'title') return pick(titles);
+  if (type === 'subject') return pick(subjects);
+
+  return null; 
+}
+
 function getFieldType(el) {
   const str = [el.id, el.name, el.placeholder, el.autocomplete,
                el.getAttribute('aria-label'), el.labels?.[0]?.textContent,
                el.closest('label')?.textContent, el.closest('div')?.textContent || '']
               .join(' ').toLowerCase();
 
-  // 1. Password
+  // Standard checks
   if (el.type === 'password') return 'password';
+  if (el.type === 'email' || /email|e-mail|mail/i.test(str)) {
+      if (/secondary|alt|backup|other/i.test(str)) return 'secondaryEmail';
+      return 'email';
+  }
+  if (/website|site|url|domain|link|web.?address/i.test(str)) {
+      if (/social|twitter|facebook|linkedin|instagram/i.test(str)) return 'social';
+      return 'website';
+  }
 
-  // 2. Email
-  if (el.type === 'email' || /email|e-mail|mail/i.test(str)) return 'email';
+  // --- SPECIFIC DETECTORS ---
+  if (/fax/i.test(str)) return 'fax';
+  if (/birth|dob|date.?of.?birth/i.test(str)) return 'dob';
+  if (/gender|sex\b|male|female/i.test(str)) return 'gender';
+  if (/language/i.test(str)) return 'language';
+  if (/time.?zone/i.test(str)) return 'timezone';
+  if (/size|employees|count/i.test(str)) return 'companySize';
+  if (/price|budget|cost|amount/i.test(str)) return 'price';
+  if (/billing/i.test(str)) return 'billing';
+  if (/shipping/i.test(str)) return 'shipping';
+  
+  if (/username|user.?name|login|handle/i.test(str)) return 'username';
+  if (/company|business|organization/i.test(str)) return 'company';
+  if (/phone|mobile|tel|cell/i.test(str)) return 'phone';
 
-  // 3. Website — highest priority for link builders
-  if (/website|site|url|domain|link|web.?address|blog|your.?site/i.test(str)) return 'website';
-
-  // 4. Username
-  if (/username|user.?name|login|handle|nick|screen.?name/i.test(str)) return 'username';
-
-  // 5. Company / Business
-  if (/company|business|organization|brand|site.?name|blog.?name|company.?name|your.?business/i.test(str)) return 'company';
-
-  // 6. Phone
-  if (/phone|mobile|tel|cell|contact.?number/i.test(str)) return 'phone';
-
-  // 7. Address & Location
-  if (/address|street|location|city|state|province|zip|post.?code|postal|country/i.test(str)) {
+  if (/address|street|location|city|state|province|zip|post.?code|country/i.test(str)) {
     if (/city|town/i.test(str)) return 'city';
     if (/state|province|region/i.test(str)) return 'region';
-    if (/zip|post.?code|postal/i.test(str)) return 'zip';
+    if (/zip|post.?code/i.test(str)) return 'zip';
     if (/country/i.test(str)) return 'country';
     return 'address';
   }
 
-  // 8. NAME FIELDS
   if (/name|person|contact/i.test(str)) {
-    if (/first|given|fname|forename/i.test(str)) return 'firstName';
-    if (/last|surname|lname|family|second/i.test(str)) return 'lastName';
-    if (/full.?name/i.test(str)) return 'firstName';
+    if (/first|given|fname/i.test(str)) return 'firstName';
+    if (/last|surname|lname/i.test(str)) return 'lastName';
     return 'firstName'; 
   }
 
-  // 9. TITLE / HEADLINE
-  if (/title|headline|subject|topic|job.?title|post.?title/i.test(str)) return 'title';
+  if (/subject|topic|re:/i.test(str)) return 'subject'; 
+  if (/title|headline|job/i.test(str)) return 'title';
 
   return 'unknown';
 }
 
-// QUAD-CLICK = FILL EVERYTHING + CHECK CONSENT BOXES
+// --- INTELLIGENT QUAD-CLICK LOGIC ---
 let clicks = 0;
 document.addEventListener('click', async e => {
-  if (['INPUT','TEXTAREA','BUTTON','A','SELECT','LABEL'].includes(e.target.tagName)) return;
+  const isInteractive = e.target.closest('a, button, input, textarea, select, label, [role="button"]');
+  if (isInteractive) return;
   
   clicks++;
   if (clicks === 1) setTimeout(() => clicks = 0, 600);
@@ -185,27 +214,85 @@ document.addEventListener('click', async e => {
     let filled = 0;
     let checked = 0;
 
-    // Fill all fields
     document.querySelectorAll('input, textarea, select').forEach(el => {
       if (el.readOnly || el.disabled) return;
+      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'];
+      if (forbiddenTypes.includes(el.type)) return;
 
-      const type = getFieldType(el);
+      let type = getFieldType(el);
 
-      if (data[type]) {
-        smartFill(el, data[type]);
-        filled++;
+      // ================================================
+      // START: SMART SELECT (DROPDOWN) HANDLING
+      // ================================================
+      if (el.tagName === 'SELECT') {
+        
+          // 1. Determine what value we WANT (Real data preferred)
+          let targetVal = data[type] ? data[type].toLowerCase() : null;
+          let selectedIndex = -1;
+
+          // 2. Loop through options to find a match
+          if (targetVal) {
+              for (let i = 0; i < el.options.length; i++) {
+                  const optText = (el.options[i].text || "").toLowerCase();
+                  const optVal = (el.options[i].value || "").toLowerCase();
+                  
+                  // Match text OR value (e.g. "US" matches "US" or "United States")
+                  if (optText.includes(targetVal) || optVal === targetVal) {
+                      selectedIndex = i;
+                      break;
+                  }
+              }
+          }
+
+          // 3. If NO match found (or no data), pick a RANDOM valid option
+          // We skip index 0 if options > 1, assuming index 0 is "Select..."
+          if (selectedIndex === -1 && el.options.length > 1) {
+              selectedIndex = Math.floor(Math.random() * (el.options.length - 1)) + 1;
+          } else if (selectedIndex === -1 && el.options.length === 1) {
+              selectedIndex = 0;
+          }
+
+          // 4. Apply selection
+          if (selectedIndex > -1) {
+              el.selectedIndex = selectedIndex;
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              filled++;
+          }
+          return; // Stop here, do not run the code below for this specific element
       }
-      // Special: Full Name handling
-      else if (type === 'unknown' && /full.?name/i.test(el.placeholder || el.name || '')) {
-        const full = `${data.firstName || ''} ${data.lastName || ''}`.trim();
-        if (full) {
-          smartFill(el, full);
-          filled++;
-        }
+      // ================================================
+      // END: SMART SELECT HANDLING
+      // ================================================
+
+      let valueToFill = null;
+
+      // 1. Try Real Data (from Popup)
+      if (data[type] && data[type].trim() !== "") {
+          valueToFill = data[type];
+      } 
+      // 2. Try Fake/Hardcoded Data (from generateFake)
+      else {
+          // Special case: Map subject to title if needed
+          if(type === 'subject' && data['title']) {
+             valueToFill = data['title'];
+          } else {
+             valueToFill = generateFake(type);
+          }
+      }
+
+      // 3. APPLY FILL OR FALLBACK
+      if (valueToFill) {
+        smartFill(el, valueToFill);
+        filled++;
+      } 
+      // 4. THE "OUT OF THE BOX" FALLBACK
+      else {
+        smartFill(el, "Business");
+        filled++;
       }
     });
 
-    // 2. CHECK BOXES
     document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
       if (cb.disabled || cb.checked) return;
       const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
@@ -216,38 +303,74 @@ document.addEventListener('click', async e => {
       }
     });
 
-    toast(`⚡ Filled ${filled} fields + Checked ${checked} boxes!`);
+    toast(`⚡ Filled ${filled} fields (Hybrid Mode) + Checked ${checked} boxes!`);
   }
 }, true);
 
-// MANUAL CLICK MENU
+// --- MANUAL CLICK MENU ---
 document.addEventListener('focusin', async e => {
   const input = e.target;
   if (!['INPUT','TEXTAREA','SELECT'].includes(input.tagName)) return;
+  if (['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'].includes(input.type)) return;
 
   const {data} = await getProfileData();
   if (!data || Object.keys(data).length === 0) return;
 
   if (suggestionBox) suggestionBox.remove();
 
-  suggestionBox = document.createElement('div');
+    suggestionBox = document.createElement('div');
   suggestionBox.className = 'llb-suggestion';
-  suggestionBox.innerHTML = `<div class="llb-header">⚡ Choose Value</div>`;
+  
+  suggestionBox.innerHTML = `
+    <div class="llb-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>⚡ Choose Value</span>
+        <span id="llb-close-btn" style="cursor: pointer; font-size: 24px; line-height: 20px; opacity: 0.8;">&times;</span>
+    </div>`;
 
-  const fields = [
+  suggestionBox.querySelector('#llb-close-btn').addEventListener('click', (e) => {
+      e.stopPropagation(); 
+      suggestionBox.remove();
+      suggestionBox = null;
+  });
+
+    const fields = [
     {key: 'firstName', label: 'First Name'},
     {key: 'lastName', label: 'Last Name'},
     {key: 'email', label: 'Email'},
     {key: 'username', label: 'Username'},
-    {key: 'website', label: 'Website URL'},
+    {key: 'password', label: 'Password'},
     {key: 'company', label: 'Company / Site'},
     {key: 'title', label: 'Title / Subject'},
+    {key: 'website', label: 'Website URL'},
     {key: 'phone', label: 'Phone'},
     {key: 'address', label: 'Address'},
-    {key: 'password', label: 'Password'}
+    {key: 'city', label: 'City'},
+    {key: 'region', label: 'Region / State'},
+    {key: 'zip', label: 'Zip / Postal'},
+    {key: 'fake', label: '🎲 Generate Fake for this field'}
   ];
 
   fields.forEach(f => {
+    if(f.key === 'fake') {
+        const item = document.createElement('div');
+        item.className = 'llb-item';
+        item.style.background = '#fff0f0';
+        item.innerHTML = `<strong>${f.label}</strong>`;
+        item.onclick = () => {
+            const type = getFieldType(input);
+            const fake = generateFake(type);
+            if(fake) {
+                smartFill(input, fake);
+                toast(`generated: ${fake}`);
+            } else {
+                toast(`⚠️ Can't fake this type (${type})`);
+            }
+            suggestionBox.remove();
+        };
+        suggestionBox.appendChild(item);
+        return;
+    }
+
     if (!data[f.key]) return;
     
     let display = data[f.key];
