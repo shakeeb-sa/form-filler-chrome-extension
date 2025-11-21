@@ -1,9 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     const status = document.getElementById('status');
-            const formFields = [
-        'username', 'email', 'password', 'firstName', 'lastName',
-        'website', 'company', 'title', 'phone', 'address', 'city', 'zip', 'region', 'country'
-    ];
+            // Inside popup.js → formFields array, add 'category'
+const formFields = [
+    'username', 'email', 'password', 'firstName', 'lastName',
+    'website', 'company', 'title', 'phone', 'address', 'city', 'zip', 'region', 'country',
+    'category'   // ← ADD THIS
+];
     
     const profileRadios = document.querySelectorAll('input[name="profile"]');
     let allData = {}; 

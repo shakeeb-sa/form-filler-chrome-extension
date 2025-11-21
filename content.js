@@ -168,6 +168,14 @@ function getFieldType(el) {
   if (/price|budget|cost|amount/i.test(str)) return 'price';
   if (/billing/i.test(str)) return 'billing';
   if (/shipping/i.test(str)) return 'shipping';
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  // ADD THIS EXACT BLOCK HERE (RIGHT AFTER THE ABOVE LINES)
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+  if (/category|cat.?id|type.?of.?post|section|classified/i.test(str) || 
+      el.id === 'catId' || el.name === 'catId') {
+    return 'category';
+  }
+  // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
   
   if (/username|user.?name|login|handle/i.test(str)) return 'username';
   if (/company|business|organization/i.test(str)) return 'company';
@@ -331,7 +339,74 @@ document.addEventListener('click', async e => {
       });
 
       // --- EXECUTE SEQUENCE ---
+            // --- EXECUTE SEQUENCE ---
       (async () => {
+
+        // === NEW: CATEGORY-ONLY LOGIC (runs first, leaves everything else untouched) ===
+        if (data.category) {
+            const categorySelect = allSelects.find(s => 
+                getFieldType(s) === 'category' || 
+                /cat.?id|category/i.test(s.id + s.name)
+            );
+
+            if (categorySelect) {
+                toast("Setting Category...");
+                
+                if (categorySelect.disabled) categorySelect.disabled = false;
+                if (categorySelect.style.opacity === '0') categorySelect.style.opacity = '1';
+
+                const target = data.category.trim().toLowerCase();
+                let found = false;
+
+                for (let i = 0; i < categorySelect.options.length; i++) {
+                    const text = categorySelect.options[i].textContent.trim().toLowerCase()
+                                      .replace(/^[-\s>&nbsp;]+/g, '');
+
+                    if (text.includes(target) || target.includes(text.replace(/services|opportunities/gi, '').trim())) {
+                        categorySelect.selectedIndex = i;
+                        fireEvents(categorySelect);
+                        toast(`Category → ${categorySelect.options[i].textContent.trim()}`);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    const fallbackTexts = [/other/i, /general/i, /everything else/i, /misc/i, /all categories/i];
+                    for (let i = 0; i < categorySelect.options.length; i++) {
+                        const txt = categorySelect.options[i].textContent.toLowerCase();
+                        if (fallbackTexts.some(re => re.test(txt))) {
+                            categorySelect.selectedIndex = i;
+                            fireEvents(categorySelect);
+                            toast(`Fallback → ${categorySelect.options[i].textContent.trim()}`);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!found && categorySelect.options.length > 2) {
+                    categorySelect.selectedIndex = 2;
+                    fireEvents(categorySelect);
+                    toast("Picked random category");
+                }
+
+                await wait(1200);
+            }
+        }
+        // === END OF CATEGORY LOGIC ===
+
+        // 1. Country
+        if (countryEl) {
+          toast("Setting Country...");
+          processSingleSelect(countryEl, 'country');
+          
+          toast("Waiting 1s for State/Region...");
+          await wait(1000); 
+        }
+        // ... rest of your original code continues perfectly ...
+        
+        
         // 1. Country
         if (countryEl) {
           toast("🇺🇸 Setting Country...");
@@ -387,6 +462,8 @@ document.addEventListener('click', async e => {
 
       return;
     }
+
+    
     // ============================================================
     // MODE 2: TEXT FIELDS & INPUTS (STANDARD 4 CLICKS)
     // ============================================================
