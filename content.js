@@ -217,163 +217,175 @@ document.addEventListener('click', async e => {
     // ============================================================
     // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
     // ============================================================
-      if (isSelectMode) {
-        const allSelects = Array.from(document.querySelectorAll('select'));
-        if (allSelects.length === 0) {
-            toast("⚠️ No dropdowns found.");
-            return;
+          if (isSelectMode) {
+      const allSelects = Array.from(document.querySelectorAll('select'));
+      if (allSelects.length === 0) {
+        toast("⚠️ No dropdowns found.");
+        return;
+      }
+
+      // --- HELPER: FIRE EVENTS (Trigger UI Updates) ---
+      const fireEvents = (el) => {
+        try {
+          el.dispatchEvent(new Event('focus', { bubbles: true }));
+          el.dispatchEvent(new Event('click', { bubbles: true })); // Added click
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true }));
+        } catch (e) { console.log(e); }
+      };
+
+      // --- HELPER: ROBUST MATCHER ---
+      const processSingleSelect = (element, forcedType = null) => {
+        // Unhide element if it's hidden (Fixes opacity: 0 issue)
+        if (element.style.opacity === '0') element.style.opacity = '1';
+        if (element.style.visibility === 'hidden') element.style.visibility = 'visible';
+
+        // 1. PRIORITY: USA
+        if (forcedType === 'country') {
+          for (let i = 0; i < element.options.length; i++) {
+            const t = (element.options[i].text || "").toLowerCase().trim();
+            if (['united states', 'usa', 'us'].includes(t)) {
+              element.selectedIndex = i;
+              fireEvents(element);
+              return true;
+            }
+          }
         }
 
-        // --- HELPER: FIRE EVENTS ---
-        const fireEvents = (el) => {
-            try {
-                el.dispatchEvent(new Event('focus', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('blur', { bubbles: true }));
-            } catch (e) { console.log(e); }
-        };
+        // 2. GET DATA
+        const type = forcedType || getFieldType(element);
+        let userVal = null;
+        if (type === 'region') userVal = (data['region'] || data['state'] || data['province'] || "");
+        else userVal = data[type] || "";
+        
+        userVal = userVal.toLowerCase().trim();
+        if (!userVal) return false;
 
-        // --- HELPER: PROCESS SELECTION ---
-        const processSingleSelect = (element, forcedType = null) => {
-            // 1. FORCE USA (Priority for Country field)
-            if (forcedType === 'country') {
-                for (let i = 0; i < element.options.length; i++) {
-                    const optText = (element.options[i].text || "").toLowerCase().trim();
-                    const optVal = (element.options[i].value || "").toLowerCase().trim();
-                    if (['united states', 'usa', 'us', 'united states of america'].includes(optText) || 
-                        ['united states', 'usa', 'us'].includes(optVal)) {
-                        element.selectedIndex = i;
-                        element.options[i].selected = true;
-                        fireEvents(element);
-                        return true; 
-                    }
-                }
+        // 3. FIND BEST MATCH
+        // We look for the option that matches the user's input best
+        let bestMatchIndex = -1;
+        
+        for (let i = 0; i < element.options.length; i++) {
+          const optText = (element.options[i].text || "").toLowerCase().trim();
+          const optVal = (element.options[i].value || "").toLowerCase().trim();
+          if (optVal === "" || optText.includes("select")) continue; // Skip placeholders
+
+          // A. Exact Match (Highest Priority)
+          if (optText === userVal || optVal === userVal) {
+            bestMatchIndex = i;
+            break; // Stop looking, we found perfection
+          }
+
+          // B. "New York City" vs "New York" Match
+          // If User says "New York City", but Option is "New York" -> Match
+          // If User says "New York", but Option is "New York City" -> Match
+          const userSimple = userVal.replace(/\bcity\b/g, '').trim();
+          const optSimple = optText.replace(/\bcity\b/g, '').trim();
+          
+          if (userSimple === optSimple && userSimple.length > 2) {
+             bestMatchIndex = i;
+          }
+        }
+
+        if (bestMatchIndex > -1) {
+          element.selectedIndex = bestMatchIndex;
+          element.options[bestMatchIndex].selected = true; // Force selection state
+          fireEvents(element);
+          toast(`✅ Found: ${element.options[bestMatchIndex].text}`);
+          return true;
+        }
+
+        return false;
+      };
+
+      // --- HELPER: WAIT FOR LIST TO POPULATE ---
+      const waitForOptions = async (element) => {
+        let attempts = 0;
+        // Wait while options are less than 2 (usually just "Select...")
+        while (element.options.length < 2 && attempts < 30) { 
+          await wait(200); // Check every 200ms
+          attempts++;
+          // Pulse opacity to show it's "thinking"
+          element.style.opacity = (attempts % 2 === 0) ? '0.5' : '1';
+        }
+        element.style.opacity = '1'; // Ensure visible
+      };
+
+      // --- IDENTIFY DROPDOWNS ---
+      let countryEl = null, regionEl = null, cityEl = null, otherSelects = [];
+      allSelects.forEach(s => {
+        if (s.disabled) return; // Don't select disabled initially
+        let type = getFieldType(s);
+        const nameStr = (s.id + " " + s.name).toLowerCase();
+        
+        // Strict ID checks because getFieldType can be fuzzy
+        if (nameStr.includes('country')) type = 'country';
+        else if (nameStr.includes('state') || nameStr.includes('region')) type = 'region';
+        else if (nameStr.includes('city')) type = 'city';
+
+        if (type === 'country') countryEl = s;
+        else if (type === 'region') regionEl = s;
+        else if (type === 'city') cityEl = s;
+        else otherSelects.push({ el: s, type: type });
+      });
+
+      // --- EXECUTE SEQUENCE ---
+      (async () => {
+        // 1. Country
+        if (countryEl) {
+          toast("🇺🇸 Setting Country...");
+          processSingleSelect(countryEl, 'country');
+          
+          // HARD WAIT: 3 Seconds for Region list to load
+          toast("⏳ Waiting 1s for State/Region...");
+          await wait(1000); 
+        }
+
+        // 2. Region
+        if (regionEl) {
+          // Ensure it's enabled
+          if(regionEl.disabled) regionEl.disabled = false;
+          
+          // Double check: ensure options are actually there
+          await waitForOptions(regionEl); 
+
+          toast("🗺️ Setting Region...");
+          processSingleSelect(regionEl, 'region');
+          
+          // HARD WAIT: 3 Seconds for City list to load
+          toast("⏳ Waiting 1s for Cities...");
+          await wait(1000); 
+        }
+
+        // 3. City
+        if (cityEl) {
+          // Ensure it's enabled
+          if(cityEl.disabled) cityEl.disabled = false;
+          
+          // Double check: ensure options are actually there
+          await waitForOptions(cityEl);
+
+          toast("🏙️ Setting City...");
+          const found = processSingleSelect(cityEl, 'city');
+          
+          if (!found) {
+            // Fallback if specific city not found
+            toast("🎲 City not found, picking random...");
+            if (cityEl.options.length > 1) {
+                cityEl.selectedIndex = Math.floor(Math.random() * (cityEl.options.length - 1)) + 1;
+                fireEvents(cityEl);
             }
+          }
+        }
 
-            // 2. MATCH USER DATA
-            const type = forcedType || getFieldType(element);
-            let targetVal = null;
+        // 4. Others
+        otherSelects.forEach(o => processSingleSelect(o.el, o.type));
 
-            // DATA RETRIEVAL STRATEGY:
-            // If type is region, check 'region', 'state', AND 'province'
-            if (type === 'region') {
-                targetVal = (data['region'] || data['state'] || data['province'] || "").toLowerCase().trim();
-            } else {
-                targetVal = data[type] ? data[type].toLowerCase().trim() : null;
-            }
+        toast(`⚡ Sequence Complete!`);
+      })();
 
-            if (targetVal) {
-                for (let i = 0; i < element.options.length; i++) {
-                    // Get text (displayed) and value (hidden code)
-                    const optText = (element.options[i].text || "").toLowerCase().trim();
-                    const optVal = (element.options[i].value || "").toLowerCase().trim();
-                    
-                    // LOGIC: Exact match OR Partial match (e.g. "new york" in "state of new york")
-                    if (optText === targetVal || optText.includes(targetVal) || optVal === targetVal) {
-                        element.selectedIndex = i;
-                        element.options[i].selected = true;
-                        fireEvents(element);
-                        toast(`✅ Found: ${element.options[i].text}`); // Debug confirmation
-                        return true;
-                    }
-                }
-            }
-
-            // 3. RANDOM FALLBACK (Only if match failed)
-            if (element.options.length > 1) {
-                element.selectedIndex = Math.floor(Math.random() * (element.options.length - 1)) + 1;
-            } else {
-                element.selectedIndex = 0;
-            }
-            fireEvents(element);
-            return true;
-        };
-
-        // --- IDENTIFY DROPDOWNS ---
-        let countryEl = null;
-        let regionEl = null;
-        let cityEl = null;
-        let otherSelects = [];
-
-        allSelects.forEach(s => {
-            if (s.disabled) return;
-            
-            // A. Detect Country by looking for "United States" in options
-            let hasUS = false;
-            for(let opt of s.options) {
-                const t = (opt.text || "").toLowerCase();
-                const v = (opt.value || "").toLowerCase();
-                if(t === 'united states' || v === 'us' || v === 'usa') hasUS = true;
-            }
-
-            // B. Get Type
-            let type = getFieldType(s);
-            
-            // --- CRITICAL FIX FOR "REGION" ---
-            // The getFieldType function sometimes misses 'regionId' because of regex issues.
-            // We force check the ID/Name here.
-            const nameStr = (s.id + " " + s.name + " " + (s.getAttribute('aria-label')||"")).toLowerCase();
-            if (type === 'unknown' || type === 'address') {
-                if (/region|state|province/i.test(nameStr)) {
-                    type = 'region';
-                }
-            }
-            // ----------------------------------
-
-            if (hasUS) countryEl = s;
-            else if (type === 'region') regionEl = s;
-            else if (type === 'city') cityEl = s;
-            else otherSelects.push({ el: s, type: type });
-        });
-
-        // --- EXECUTE SEQUENCE ---
-        (async () => {
-            let count = 0;
-            
-            // 1. Country
-            if (countryEl) {
-                toast("🇺🇸 Setting Country...");
-                processSingleSelect(countryEl, 'country');
-                count++;
-                // Wait 2.5s for the site to load regions
-                await wait(2500); 
-            }
-
-            // 2. Region
-            if (regionEl) {
-                // Enable it if the site forgot to
-                if(regionEl.disabled) regionEl.disabled = false;
-                
-                // Force opacity update just in case (visual helper)
-                regionEl.style.opacity = '1'; 
-
-                toast("🗺️ Setting Region...");
-                const success = processSingleSelect(regionEl, 'region');
-                if (!success) toast("⚠️ Region match failed (Check spelling)");
-                
-                count++;
-                await wait(1500); 
-            }
-
-            // 3. City
-            if (cityEl) {
-                if(cityEl.disabled) cityEl.disabled = false;
-                toast("🏙️ Setting City...");
-                processSingleSelect(cityEl, 'city');
-                count++;
-            }
-
-            // 4. Others
-            otherSelects.forEach(o => {
-                processSingleSelect(o.el, o.type);
-                count++;
-            });
-
-            toast(`⚡ Sequence Complete!`);
-        })();
-
-        return; 
+      return;
     }
     // ============================================================
     // MODE 2: TEXT FIELDS & INPUTS (STANDARD 4 CLICKS)
