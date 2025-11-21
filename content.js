@@ -214,85 +214,179 @@ document.addEventListener('click', async e => {
       return;
     }
 
+    // ============================================================
+    // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
+    // ============================================================
+      if (isSelectMode) {
+        const allSelects = Array.from(document.querySelectorAll('select'));
+        if (allSelects.length === 0) {
+            toast("⚠️ No dropdowns found.");
+            return;
+        }
+
+        // --- HELPER: FIRE EVENTS ---
+        const fireEvents = (el) => {
+            try {
+                el.dispatchEvent(new Event('focus', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('blur', { bubbles: true }));
+            } catch (e) { console.log(e); }
+        };
+
+        // --- HELPER: PROCESS SELECTION ---
+        const processSingleSelect = (element, forcedType = null) => {
+            // 1. FORCE USA (Priority for Country field)
+            if (forcedType === 'country') {
+                for (let i = 0; i < element.options.length; i++) {
+                    const optText = (element.options[i].text || "").toLowerCase().trim();
+                    const optVal = (element.options[i].value || "").toLowerCase().trim();
+                    if (['united states', 'usa', 'us', 'united states of america'].includes(optText) || 
+                        ['united states', 'usa', 'us'].includes(optVal)) {
+                        element.selectedIndex = i;
+                        element.options[i].selected = true;
+                        fireEvents(element);
+                        return true; 
+                    }
+                }
+            }
+
+            // 2. MATCH USER DATA
+            const type = forcedType || getFieldType(element);
+            let targetVal = null;
+
+            // DATA RETRIEVAL STRATEGY:
+            // If type is region, check 'region', 'state', AND 'province'
+            if (type === 'region') {
+                targetVal = (data['region'] || data['state'] || data['province'] || "").toLowerCase().trim();
+            } else {
+                targetVal = data[type] ? data[type].toLowerCase().trim() : null;
+            }
+
+            if (targetVal) {
+                for (let i = 0; i < element.options.length; i++) {
+                    // Get text (displayed) and value (hidden code)
+                    const optText = (element.options[i].text || "").toLowerCase().trim();
+                    const optVal = (element.options[i].value || "").toLowerCase().trim();
+                    
+                    // LOGIC: Exact match OR Partial match (e.g. "new york" in "state of new york")
+                    if (optText === targetVal || optText.includes(targetVal) || optVal === targetVal) {
+                        element.selectedIndex = i;
+                        element.options[i].selected = true;
+                        fireEvents(element);
+                        toast(`✅ Found: ${element.options[i].text}`); // Debug confirmation
+                        return true;
+                    }
+                }
+            }
+
+            // 3. RANDOM FALLBACK (Only if match failed)
+            if (element.options.length > 1) {
+                element.selectedIndex = Math.floor(Math.random() * (element.options.length - 1)) + 1;
+            } else {
+                element.selectedIndex = 0;
+            }
+            fireEvents(element);
+            return true;
+        };
+
+        // --- IDENTIFY DROPDOWNS ---
+        let countryEl = null;
+        let regionEl = null;
+        let cityEl = null;
+        let otherSelects = [];
+
+        allSelects.forEach(s => {
+            if (s.disabled) return;
+            
+            // A. Detect Country by looking for "United States" in options
+            let hasUS = false;
+            for(let opt of s.options) {
+                const t = (opt.text || "").toLowerCase();
+                const v = (opt.value || "").toLowerCase();
+                if(t === 'united states' || v === 'us' || v === 'usa') hasUS = true;
+            }
+
+            // B. Get Type
+            let type = getFieldType(s);
+            
+            // --- CRITICAL FIX FOR "REGION" ---
+            // The getFieldType function sometimes misses 'regionId' because of regex issues.
+            // We force check the ID/Name here.
+            const nameStr = (s.id + " " + s.name + " " + (s.getAttribute('aria-label')||"")).toLowerCase();
+            if (type === 'unknown' || type === 'address') {
+                if (/region|state|province/i.test(nameStr)) {
+                    type = 'region';
+                }
+            }
+            // ----------------------------------
+
+            if (hasUS) countryEl = s;
+            else if (type === 'region') regionEl = s;
+            else if (type === 'city') cityEl = s;
+            else otherSelects.push({ el: s, type: type });
+        });
+
+        // --- EXECUTE SEQUENCE ---
+        (async () => {
+            let count = 0;
+            
+            // 1. Country
+            if (countryEl) {
+                toast("🇺🇸 Setting Country...");
+                processSingleSelect(countryEl, 'country');
+                count++;
+                // Wait 2.5s for the site to load regions
+                await wait(2500); 
+            }
+
+            // 2. Region
+            if (regionEl) {
+                // Enable it if the site forgot to
+                if(regionEl.disabled) regionEl.disabled = false;
+                
+                // Force opacity update just in case (visual helper)
+                regionEl.style.opacity = '1'; 
+
+                toast("🗺️ Setting Region...");
+                const success = processSingleSelect(regionEl, 'region');
+                if (!success) toast("⚠️ Region match failed (Check spelling)");
+                
+                count++;
+                await wait(1500); 
+            }
+
+            // 3. City
+            if (cityEl) {
+                if(cityEl.disabled) cityEl.disabled = false;
+                toast("🏙️ Setting City...");
+                processSingleSelect(cityEl, 'city');
+                count++;
+            }
+
+            // 4. Others
+            otherSelects.forEach(o => {
+                processSingleSelect(o.el, o.type);
+                count++;
+            });
+
+            toast(`⚡ Sequence Complete!`);
+        })();
+
+        return; 
+    }
+    // ============================================================
+    // MODE 2: TEXT FIELDS & INPUTS (STANDARD 4 CLICKS)
+    // ============================================================
     let filled = 0;
     let checked = 0;
 
-    // DETERMINE SELECTOR BASED ON MODE
-    // If Ctrl is held: ONLY target <select>
-    // If Ctrl NOT held: ONLY target <input> and <textarea>
-    const selector = isSelectMode ? 'select' : 'input, textarea';
-
-    document.querySelectorAll(selector).forEach(el => {
+    document.querySelectorAll('input, textarea').forEach(el => {
       if (el.readOnly || el.disabled) return;
-      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file'];
+      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'];
       if (forbiddenTypes.includes(el.type)) return;
 
       let type = getFieldType(el);
-
-      // ================================================
-      // MODE 1: DROPDOWNS ONLY (Ctrl + 4 Clicks)
-      // ================================================
-      if (el.tagName === 'SELECT') {
-          
-          // 1. FORCE "USA" LOGIC
-          if (type === 'country') {
-              for (let i = 0; i < el.options.length; i++) {
-                  const optText = (el.options[i].text || "").toLowerCase().trim();
-                  const optVal = (el.options[i].value || "").toLowerCase().trim();
-                  
-                  if (optText === "united states" || optText === "usa" || optText === "us" || 
-                      optVal === "us" || optVal === "usa" || optVal === "united states") {
-                      
-                      el.selectedIndex = i;
-                      el.options[i].selected = true;
-                      el.dispatchEvent(new Event('change', { bubbles: true }));
-                      el.dispatchEvent(new Event('input', { bubbles: true }));
-                      el.dispatchEvent(new Event('click', { bubbles: true }));
-                      el.dispatchEvent(new Event('blur', { bubbles: true }));
-                      filled++;
-                      return; 
-                  }
-              }
-          }
-
-          // 2. STANDARD LOGIC
-          let targetVal = data[type] ? data[type].toLowerCase() : null;
-          let selectedIndex = -1;
-
-          if (targetVal) {
-              for (let i = 0; i < el.options.length; i++) {
-                  const optText = (el.options[i].text || "").toLowerCase();
-                  const optVal = (el.options[i].value || "").toLowerCase();
-                  if (optText.includes(targetVal) || optVal === targetVal) {
-                      selectedIndex = i;
-                      break;
-                  }
-              }
-          }
-
-          // Fallback: Pick Random
-          if (selectedIndex === -1 && el.options.length > 1) {
-              selectedIndex = Math.floor(Math.random() * (el.options.length - 1)) + 1;
-          } else if (selectedIndex === -1 && el.options.length === 1) {
-              selectedIndex = 0;
-          }
-
-          if (selectedIndex > -1) {
-              el.selectedIndex = selectedIndex;
-              el.dispatchEvent(new Event('change', { bubbles: true }));
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-              filled++;
-          }
-          return; // Done with Select
-      }
-
-      // ================================================
-      // MODE 2: TEXT FIELDS ONLY (4 Clicks)
-      // ================================================
-      
-      // We skip this entirely if we are in Select Mode because the selector didn't grab inputs
-      if (['checkbox', 'radio'].includes(el.type)) return; // handled later for checkboxes
-
       let valueToFill = null;
 
       if (data[type] && data[type].trim() !== "") {
@@ -314,25 +408,18 @@ document.addEventListener('click', async e => {
       }
     });
 
-    // --- CHECKBOX HANDLING (Only runs on Standard Click, ignored on Ctrl Click) ---
-    if (!isSelectMode) {
-        document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-          if (cb.disabled || cb.checked) return;
-          const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
-          if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
-            cb.checked = true;
-            cb.dispatchEvent(new Event('change', { bubbles: true }));
-            checked++;
-          }
-        });
-    }
+    // Checkbox Handling
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (cb.disabled || cb.checked) return;
+      const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
+      if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+        checked++;
+      }
+    });
 
-    // --- DYNAMIC TOAST MESSAGE ---
-    if (isSelectMode) {
-        toast(`⚡ Set ${filled} Dropdowns! (Inputs Ignored)`);
-    } else {
-        toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes! (Selects Ignored)`);
-    }
+    toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes!`);
   }
 }, true);
 
@@ -436,3 +523,6 @@ document.addEventListener('click', e => {
     suggestionBox = null;
   }
 });
+
+// Helper to pause execution
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
