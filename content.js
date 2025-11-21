@@ -205,6 +205,9 @@ document.addEventListener('click', async e => {
   if (clicks === 4) {
     clicks = 0;
     
+    // CHECK MODIFIER KEYS
+    const isSelectMode = e.ctrlKey || e.metaKey; // True if Ctrl (Win) or Cmd (Mac) is held
+
     const {data} = await getProfileData();
     if (!data || Object.keys(data).length === 0) {
       toast("⚠️ No data saved! Open popup → fill → save");
@@ -214,29 +217,52 @@ document.addEventListener('click', async e => {
     let filled = 0;
     let checked = 0;
 
-    document.querySelectorAll('input, textarea, select').forEach(el => {
+    // DETERMINE SELECTOR BASED ON MODE
+    // If Ctrl is held: ONLY target <select>
+    // If Ctrl NOT held: ONLY target <input> and <textarea>
+    const selector = isSelectMode ? 'select' : 'input, textarea';
+
+    document.querySelectorAll(selector).forEach(el => {
       if (el.readOnly || el.disabled) return;
-      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'];
+      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file'];
       if (forbiddenTypes.includes(el.type)) return;
 
       let type = getFieldType(el);
 
       // ================================================
-      // START: SMART SELECT (DROPDOWN) HANDLING
+      // MODE 1: DROPDOWNS ONLY (Ctrl + 4 Clicks)
       // ================================================
       if (el.tagName === 'SELECT') {
-        
-          // 1. Determine what value we WANT (Real data preferred)
+          
+          // 1. FORCE "USA" LOGIC
+          if (type === 'country') {
+              for (let i = 0; i < el.options.length; i++) {
+                  const optText = (el.options[i].text || "").toLowerCase().trim();
+                  const optVal = (el.options[i].value || "").toLowerCase().trim();
+                  
+                  if (optText === "united states" || optText === "usa" || optText === "us" || 
+                      optVal === "us" || optVal === "usa" || optVal === "united states") {
+                      
+                      el.selectedIndex = i;
+                      el.options[i].selected = true;
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      el.dispatchEvent(new Event('input', { bubbles: true }));
+                      el.dispatchEvent(new Event('click', { bubbles: true }));
+                      el.dispatchEvent(new Event('blur', { bubbles: true }));
+                      filled++;
+                      return; 
+                  }
+              }
+          }
+
+          // 2. STANDARD LOGIC
           let targetVal = data[type] ? data[type].toLowerCase() : null;
           let selectedIndex = -1;
 
-          // 2. Loop through options to find a match
           if (targetVal) {
               for (let i = 0; i < el.options.length; i++) {
                   const optText = (el.options[i].text || "").toLowerCase();
                   const optVal = (el.options[i].value || "").toLowerCase();
-                  
-                  // Match text OR value (e.g. "US" matches "US" or "United States")
                   if (optText.includes(targetVal) || optVal === targetVal) {
                       selectedIndex = i;
                       break;
@@ -244,36 +270,34 @@ document.addEventListener('click', async e => {
               }
           }
 
-          // 3. If NO match found (or no data), pick a RANDOM valid option
-          // We skip index 0 if options > 1, assuming index 0 is "Select..."
+          // Fallback: Pick Random
           if (selectedIndex === -1 && el.options.length > 1) {
               selectedIndex = Math.floor(Math.random() * (el.options.length - 1)) + 1;
           } else if (selectedIndex === -1 && el.options.length === 1) {
               selectedIndex = 0;
           }
 
-          // 4. Apply selection
           if (selectedIndex > -1) {
               el.selectedIndex = selectedIndex;
               el.dispatchEvent(new Event('change', { bubbles: true }));
               el.dispatchEvent(new Event('input', { bubbles: true }));
               filled++;
           }
-          return; // Stop here, do not run the code below for this specific element
+          return; // Done with Select
       }
+
       // ================================================
-      // END: SMART SELECT HANDLING
+      // MODE 2: TEXT FIELDS ONLY (4 Clicks)
       // ================================================
+      
+      // We skip this entirely if we are in Select Mode because the selector didn't grab inputs
+      if (['checkbox', 'radio'].includes(el.type)) return; // handled later for checkboxes
 
       let valueToFill = null;
 
-      // 1. Try Real Data (from Popup)
       if (data[type] && data[type].trim() !== "") {
           valueToFill = data[type];
-      } 
-      // 2. Try Fake/Hardcoded Data (from generateFake)
-      else {
-          // Special case: Map subject to title if needed
+      } else {
           if(type === 'subject' && data['title']) {
              valueToFill = data['title'];
           } else {
@@ -281,29 +305,34 @@ document.addEventListener('click', async e => {
           }
       }
 
-      // 3. APPLY FILL OR FALLBACK
       if (valueToFill) {
         smartFill(el, valueToFill);
         filled++;
-      } 
-      // 4. THE "OUT OF THE BOX" FALLBACK
-      else {
+      } else {
         smartFill(el, "Business");
         filled++;
       }
     });
 
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      if (cb.disabled || cb.checked) return;
-      const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
-      if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
-        cb.checked = true;
-        cb.dispatchEvent(new Event('change', { bubbles: true }));
-        checked++;
-      }
-    });
+    // --- CHECKBOX HANDLING (Only runs on Standard Click, ignored on Ctrl Click) ---
+    if (!isSelectMode) {
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          if (cb.disabled || cb.checked) return;
+          const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
+          if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
+            cb.checked = true;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
+            checked++;
+          }
+        });
+    }
 
-    toast(`⚡ Filled ${filled} fields (Hybrid Mode) + Checked ${checked} boxes!`);
+    // --- DYNAMIC TOAST MESSAGE ---
+    if (isSelectMode) {
+        toast(`⚡ Set ${filled} Dropdowns! (Inputs Ignored)`);
+    } else {
+        toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes! (Selects Ignored)`);
+    }
   }
 }, true);
 
