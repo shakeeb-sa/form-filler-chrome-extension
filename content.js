@@ -1082,8 +1082,9 @@ document.addEventListener("dblclick", (e) => {
 });
 
 // ============================================================
-// ⚡ MERGED TOOL: TEXT FILLER / LINK CONVERTER LOGIC
-// TRIGGER: Ctrl + Double Right Click (Updated: 5 Fields)
+// ⚡ SUPER RIGHT-CLICK HANDLER
+// 1. Ctrl + Double Right Click = Text Menu
+// 2. Alt  + Double Right Click = Auto Submit/Publish
 // ============================================================
 (() => {
   let lastRightClickTime = 0;
@@ -1092,22 +1093,35 @@ document.addEventListener("dblclick", (e) => {
   document.addEventListener(
     "contextmenu",
     (e) => {
-      if (!e.ctrlKey) return; // Must hold CTRL
+      // We only care if CTRL or ALT is held
+      if (!e.ctrlKey && !e.altKey) return;
 
       const currentTime = new Date().getTime();
       const timeDiff = currentTime - lastRightClickTime;
 
       if (timeDiff < 600) {
+        // --- DOUBLE CLICK DETECTED ---
         e.preventDefault();
         e.stopPropagation();
 
         currentRightClickTarget = e.target;
+        lastRightClickTime = 0; // Reset timer
 
-        if (typeof toast === "function") toast("⚡ Opening Text Menu...");
-        createOverlayMenu(e.clientX, e.clientY);
+        // ➤ JOB 1: TEXT MENU (Ctrl + Double Right Click)
+        if (e.ctrlKey) {
+          if (typeof toast === "function") toast("⚡ Opening Text Menu...");
+          createOverlayMenu(e.clientX, e.clientY);
+          return;
+        }
 
-        lastRightClickTime = 0;
+        // ➤ JOB 2: AUTO SUBMIT (Alt + Double Right Click)
+        if (e.altKey) {
+          if (typeof toast === "function") toast("🚀 Auto Submitting...");
+          triggerAutoSubmit();
+          return;
+        }
       } else {
+        // First click: Prevent default to allow for double click detection
         e.preventDefault();
         e.stopPropagation();
         lastRightClickTime = currentTime;
@@ -1117,6 +1131,113 @@ document.addEventListener("dblclick", (e) => {
     true
   );
 
+  // -------------------------------------------------------
+  // LOGIC: AUTO SUBMIT (Extracted & Upgraded)
+  // -------------------------------------------------------
+  function triggerAutoSubmit() {
+    const submitKeywords = [
+      "submit",
+      "post",
+      "publish",
+      "register",
+      "sign up",
+      "signup",
+      "login",
+      "sign in",
+      "signin",
+      "create",
+      "save",
+      "continue",
+      "post ad",
+      "post listing",
+      "place order",
+      "complete",
+      "finish",
+      "proceed",
+      "next",
+      "add listing",
+      "list now",
+    ];
+
+    const buttons = Array.from(
+      document.querySelectorAll(
+        'button, input[type="submit"], input[type="button"], a[role="button"], div[role="button"], span[role="button"]'
+      )
+    ).filter((btn) => {
+      // 1. Must be visible
+      if (!btn.offsetParent || btn.offsetWidth < 30 || btn.offsetHeight < 20)
+        return false;
+      if (btn.disabled) return false;
+
+      // 2. Text must contain a submit keyword
+      const text = (
+        btn.textContent ||
+        btn.value ||
+        btn.title ||
+        btn.getAttribute("aria-label") ||
+        ""
+      )
+        .toLowerCase()
+        .trim();
+      if (!submitKeywords.some((kw) => text.includes(kw))) return false;
+
+      // 3. EXCLUDE EDITORS / TOOLBARS
+      const parent = btn.closest("div, span, td, li");
+      if (!parent) return true;
+
+      const parentClass = (parent.className || "").toLowerCase();
+      const parentId = (parent.id || "").toLowerCase();
+      const blacklist = [
+        "mce",
+        "cke",
+        "tox",
+        "ql-",
+        "editor",
+        "toolbar",
+        "format",
+        "wp-",
+        "admin",
+        "menu",
+        "nav",
+        "header",
+      ];
+
+      if (
+        blacklist.some(
+          (term) => parentClass.includes(term) || parentId.includes(term)
+        )
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (buttons.length > 0) {
+      // Sort by visual prominence (usually the last button in DOM is the main one, or distinct style)
+      const target = buttons[buttons.length - 1];
+
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Highlights the button briefly
+      target.style.outline = "3px solid #e74c3c";
+      target.style.boxShadow = "0 0 15px rgba(231, 76, 60, 0.5)";
+
+      setTimeout(() => {
+        target.click();
+        if (typeof toast === "function")
+          toast(`Clicked: "${target.textContent.trim() || target.value}"`);
+        target.style.outline = "";
+        target.style.boxShadow = "";
+      }, 300);
+    } else {
+      if (typeof toast === "function")
+        toast("⚠️ No clear 'Submit' button found.");
+    }
+  }
+
+  // -------------------------------------------------------
+  // LOGIC: TEXT MENU (Existing)
+  // -------------------------------------------------------
   document.addEventListener("click", (e) => {
     if (
       e.target.id !== "qtf-overlay-menu" &&
@@ -1129,13 +1250,10 @@ document.addEventListener("dblclick", (e) => {
   function createOverlayMenu(x, y) {
     removeOverlayMenu();
 
-    // 🟢 CHANGE 1: Fetch 'masterHTML' as well
     chrome.storage.sync.get(["snippets", "masterHTML"], (result) => {
       const snippets = result.snippets || [];
       const master = result.masterHTML;
 
-      // 🟢 CHANGE 2: Add Master to the list (Total 5 items)
-      // We use a flag objects to know which one is the Master
       let itemsToRender = snippets.map((txt, idx) => ({
         text: txt,
         label:
@@ -1149,7 +1267,7 @@ document.addEventListener("dblclick", (e) => {
         itemsToRender.push({
           text: master,
           label: "⭐ Original / Rich Text",
-          isRich: true, // Flag to treat this differently
+          isRich: true,
         });
       }
 
@@ -1180,7 +1298,6 @@ document.addEventListener("dblclick", (e) => {
           const menuEl = document.createElement("div");
           menuEl.className = "qtf-item";
 
-          // For the preview, if it's rich text, we strip tags to keep the menu clean
           let previewText = item.text;
           if (item.isRich) {
             const temp = document.createElement("div");
@@ -1256,9 +1373,7 @@ document.addEventListener("dblclick", (e) => {
   function handleSnippetSelection(text, isRich) {
     removeOverlayMenu();
 
-    // 1. Copy Logic
     if (isRich) {
-      // For Rich Text, we try to write HTML to clipboard
       try {
         const blobHtml = new Blob([text], { type: "text/html" });
         const blobText = new Blob([text.replace(/<[^>]*>?/gm, "")], {
@@ -1272,7 +1387,6 @@ document.addEventListener("dblclick", (e) => {
         ];
         navigator.clipboard.write(data);
       } catch (e) {
-        // Fallback to plain text if browser blocks rich copy
         navigator.clipboard.writeText(text);
       }
     } else {
@@ -1281,27 +1395,22 @@ document.addEventListener("dblclick", (e) => {
 
     if (typeof toast === "function") toast("✅ Copied & Pasted!");
 
-    // 2. Paste Logic
     if (currentRightClickTarget) {
       insertSnippetLogic(currentRightClickTarget, text, isRich);
     }
   }
 
-  // 🟢 CHANGE 3: Updated Insertion Logic to handle 'isRich'
   function insertSnippetLogic(target, text, isRich) {
     target.focus();
 
-    // A. If it's the Master (Rich Text), try insertHTML first to keep the link alive
     if (isRich) {
       const success = document.execCommand("insertHTML", false, text);
       if (success) return;
     }
 
-    // B. Standard Text Insert
     const success = document.execCommand("insertText", false, text);
     if (success) return;
 
-    // C. Manual Insert (React/Framework fallback)
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
       const proto =
         target.tagName === "INPUT"
@@ -1317,7 +1426,6 @@ document.addEventListener("dblclick", (e) => {
       return;
     }
 
-    // D. ContentEditable Fallback
     if (target.isContentEditable || document.designMode === "on") {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
@@ -1325,15 +1433,9 @@ document.addEventListener("dblclick", (e) => {
         range.deleteContents();
 
         if (isRich) {
-          // Insert as HTML elements
-          const temp = document.createElement("div");
-          temp.innerHTML = text;
-          // Insert children one by one or just the text node
-          // Simplest way for range is usually createContextualFragment
           const frag = range.createContextualFragment(text);
           range.insertNode(frag);
         } else {
-          // Insert as plain text
           range.insertNode(document.createTextNode(text));
         }
         target.dispatchEvent(new Event("input", { bubbles: true }));
