@@ -211,16 +211,77 @@ document.addEventListener('click', async e => {
   if (clicks === 1) setTimeout(() => clicks = 0, 600);
   
   if (clicks === 4) {
-    clicks = 0;
-    
-    // CHECK MODIFIER KEYS
-    const isSelectMode = e.ctrlKey || e.metaKey; // True if Ctrl (Win) or Cmd (Mac) is held
+  clicks = 0;
 
-    const {data} = await getProfileData();
-    if (!data || Object.keys(data).length === 0) {
-      toast("⚠️ No data saved! Open popup → fill → save");
-      return;
+  // MODIFIER COMBINATIONS
+  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey;        // Ctrl/Cmd + 4 clicks → Smart Selects (your current one)
+  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         // Ctrl + Alt + 4 clicks → Submit Button Hunter
+  const isRegularFill    = !e.ctrlKey && !e.metaKey && !e.altKey;        // Plain 4 clicks → Normal text fill
+
+  const {data} = await getProfileData();
+  if (!data || Object.keys(data).length === 0) {
+    toast("⚠️ No data saved! Open popup → fill → save");
+    return;
+  }
+
+    // ────────────────────────────────
+  //  ★★★ CTRL + ALT + 4 CLICKS = AUTO SUBMIT (ULTRA SAFE VERSION) ★★★
+  // ────────────────────────────────
+  if (isSubmitMode) {
+    const submitKeywords = [
+      'submit', 'post', 'publish', 'register', 'sign up', 'signup', 
+      'login', 'sign in', 'signin', 'create', 'save', 'continue', 
+      'post ad', 'post listing', 'place order', 'complete', 'finish',
+      'proceed', 'next', 'add listing', 'list now'
+    ];
+
+    const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a[role="button"]'))
+      .filter(btn => {
+        // 1. Must be visible
+        if (!btn.offsetParent || btn.offsetWidth < 30 || btn.offsetHeight < 20) return false;
+        if (btn.disabled) return false;
+
+        // 2. Text must contain a submit keyword
+        const text = (btn.textContent || btn.value || btn.title || btn.getAttribute('aria-label') || '').toLowerCase().trim();
+        if (!submitKeywords.some(kw => text.includes(kw))) return false;
+
+        // 3. CRITICAL: EXCLUDE ANY BUTTON INSIDE EDITORS OR TOOLBARS
+        const parent = btn.closest('div, span, td, li');
+        if (!parent) return true;
+
+        const parentText = parent.textContent.toLowerCase();
+        const parentClass = (parent.className || '').toLowerCase();
+        const parentId = (parent.id || '').toLowerCase();
+
+        // Blacklist known editor toolbar patterns
+        const blacklist = [
+          'mce', 'cke', 'tox', 'ql-', 'editor', 'toolbar', 'format', 'bold', 'italic', 'bullet', 'list',
+          'wp-', 'admin', 'dashboard', 'menu', 'nav', 'sidebar', 'header', 'footer', 'modal', 'popup'
+        ];
+
+        if (blacklist.some(term => parentClass.includes(term) || parentId.includes(term))) {
+          return false;
+        }
+
+        // Extra safety: if button is tiny or inside a <b>, <strong>, <i>, etc. → skip
+        if (btn.closest('b, strong, i, em, u, span[style*="bold"], div[style*="font-weight"]')) return false;
+
+        return true;
+      });
+
+    if (buttons.length > 0) {
+      const target = buttons[0];
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        target.click();
+        toast(`Submitted: "${target.textContent.trim() || target.value}"`);
+      }, 500);
+    } else {
+      toast("No real submit button found");
     }
+
+    return; // Stops everything else — 100% isolated
+  }
 
     // ============================================================
     // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
