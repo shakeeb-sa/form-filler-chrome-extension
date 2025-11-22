@@ -213,9 +213,11 @@ document.addEventListener('click', async e => {
   if (clicks === 4) {
   clicks = 0;
 
-  // MODIFIER COMBINATIONS
-  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey;        // Ctrl/Cmd + 4 clicks → Smart Selects (your current one)
-  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         // Ctrl + Alt + 4 clicks → Submit Button Hunter
+   // MODIFIER COMBINATIONS
+  // We add !e.shiftKey to isSelectMode so it doesn't trigger when you want the new mode
+  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey; 
+  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         
+  const isHardSelectMode = (e.ctrlKey || e.metaKey) && e.shiftKey; // New Hard Mode (Ctrl + Shift)
   const isRegularFill    = !e.ctrlKey && !e.metaKey && !e.altKey;        // Plain 4 clicks → Normal text fill
 
   const {data} = await getProfileData();
@@ -282,6 +284,72 @@ document.addEventListener('click', async e => {
 
     return; // Stops everything else — 100% isolated
   }
+
+      // ────────────────────────────────
+    //  ★★★ CTRL + SHIFT + 4 CLICKS = HARD SELECT (CLEANUP MODE) ★★★
+    // ────────────────────────────────
+    if (isHardSelectMode) {
+      let fixedCount = 0;
+      const allSelects = Array.from(document.querySelectorAll('select'));
+
+      // Helper to fire events
+      const fireEvents = (el) => {
+        try {
+            el.dispatchEvent(new Event('focus', { bubbles: true }));
+            el.dispatchEvent(new Event('click', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+        } catch (e) {}
+      };
+
+      allSelects.forEach(el => {
+        // 1. Safety Checks: Must be visible and enabled
+        if (el.disabled || el.offsetParent === null) return;
+
+        // 2. Check if it's already filled
+        // We consider it "Empty" if value is blank OR text says "Select/Choose"
+        const currentTxt = (el.options[el.selectedIndex]?.text || "").toLowerCase();
+        const currentVal = el.value;
+        const isFilled = currentVal !== "" && 
+                         !currentTxt.includes("select") && 
+                         !currentTxt.includes("choose") && 
+                         !currentTxt.includes("none");
+
+        if (isFilled) return; // Don't touch what the Core Logic already did!
+
+        // 3. Find a valid option to pick
+        const validIndices = [];
+        for (let i = 0; i < el.options.length; i++) {
+            const txt = (el.options[i].text || "").toLowerCase();
+            const val = el.options[i].value;
+            
+            // Must not be disabled, empty, or a placeholder label
+            if (!el.options[i].disabled && val !== "" && 
+                !txt.includes("select") && !txt.includes("choose")) {
+                validIndices.push(i);
+            }
+        }
+
+        // 4. Select Random Valid Option
+        if (validIndices.length > 0) {
+            const randomIdx = validIndices[Math.floor(Math.random() * validIndices.length)];
+            el.selectedIndex = randomIdx;
+            fireEvents(el);
+            fixedCount++;
+        } else if (el.options.length > 1) {
+            // Desperation move: just pick index 1 if logic fails
+            el.selectedIndex = 1;
+            fireEvents(el);
+            fixedCount++;
+        }
+      });
+
+      if (fixedCount > 0) toast(`🧹 Hard Select: Filled ${fixedCount} missed dropdowns!`);
+      else toast("✅ All dropdowns appear to be filled.");
+      
+      return; // Stop here
+    }
 
     // ============================================================
     // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
@@ -518,7 +586,18 @@ document.addEventListener('click', async e => {
         // 4. Others
         otherSelects.forEach(o => processSingleSelect(o.el, o.type));
 
-        toast(`⚡ Sequence Complete!`);
+                // CHECK FOR LEFTOVERS
+        const remainingMissed = Array.from(document.querySelectorAll('select')).filter(s => {
+            if(s.disabled || s.offsetParent === null) return false;
+            const txt = (s.options[s.selectedIndex]?.text || "").toLowerCase();
+            return s.value === "" || txt.includes('select') || txt.includes('choose');
+        });
+
+        if (remainingMissed.length > 0) {
+            toast(`⚡ Done! (⚠️ ${remainingMissed.length} missed → Use Ctrl+Shift+Click)`);
+        } else {
+            toast(`⚡ Sequence Complete!`);
+        }
       })();
 
       return;
