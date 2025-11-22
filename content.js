@@ -880,6 +880,44 @@ document.addEventListener(
 
       // ... (smartFill logic above remains the same) ...
 
+      // ────────────────────────────────────────────────────────────
+      //  ★★★ UNIVERSAL FILE UPLOADER TRIGGER (NEW) ★★★
+      // ────────────────────────────────────────────────────────────
+      const fileInputs = Array.from(
+        document.querySelectorAll('input[type="file"]')
+      );
+      const validUploaders = fileInputs.filter((el) => !el.disabled);
+
+      if (validUploaders.length > 0) {
+        const uploader = validUploaders[0];
+
+        // Scroll so you see it
+        if (uploader.offsetParent !== null) {
+          uploader.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        setTimeout(() => {
+          toast("📂 Opening File Picker...");
+
+          // Handle hidden inputs (common in modern designs)
+          const isHidden =
+            uploader.style.display === "none" ||
+            uploader.style.visibility === "hidden" ||
+            uploader.style.opacity === "0" ||
+            uploader.offsetParent === null;
+
+          if (isHidden && uploader.id) {
+            const label = document.querySelector(`label[for="${uploader.id}"]`);
+            if (label) {
+              label.click();
+              return;
+            }
+          }
+          // Standard Click
+          uploader.click();
+        }, 500);
+      }
+
       // CHECK FOR EMPTY INPUTS
       const missedInputs = Array.from(
         document.querySelectorAll(
@@ -1045,7 +1083,7 @@ document.addEventListener("dblclick", (e) => {
 
 // ============================================================
 // ⚡ MERGED TOOL: TEXT FILLER / LINK CONVERTER LOGIC
-// TRIGGER: Ctrl + Double Right Click (Self-Contained Fix)
+// TRIGGER: Ctrl + Double Right Click (Updated: 5 Fields)
 // ============================================================
 (() => {
   let lastRightClickTime = 0;
@@ -1054,38 +1092,31 @@ document.addEventListener("dblclick", (e) => {
   document.addEventListener(
     "contextmenu",
     (e) => {
-      // 1. Must hold CTRL key
-      if (!e.ctrlKey) return;
+      if (!e.ctrlKey) return; // Must hold CTRL
 
       const currentTime = new Date().getTime();
       const timeDiff = currentTime - lastRightClickTime;
 
-      // 2. Double Right Click Logic (< 600ms)
       if (timeDiff < 600) {
         e.preventDefault();
         e.stopPropagation();
 
         currentRightClickTarget = e.target;
 
-        // VISUAL FEEDBACK: Let user know it worked
         if (typeof toast === "function") toast("⚡ Opening Text Menu...");
-
         createOverlayMenu(e.clientX, e.clientY);
 
         lastRightClickTime = 0;
       } else {
-        // 3. First Click: Block standard menu so we can wait for the second click
         e.preventDefault();
         e.stopPropagation();
-
         lastRightClickTime = currentTime;
         removeOverlayMenu();
       }
     },
     true
-  ); // Capture phase to beat other scripts
+  );
 
-  // Close menu when clicking elsewhere
   document.addEventListener("click", (e) => {
     if (
       e.target.id !== "qtf-overlay-menu" &&
@@ -1098,14 +1129,29 @@ document.addEventListener("dblclick", (e) => {
   function createOverlayMenu(x, y) {
     removeOverlayMenu();
 
-    chrome.storage.sync.get(["snippets"], (result) => {
+    // 🟢 CHANGE 1: Fetch 'masterHTML' as well
+    chrome.storage.sync.get(["snippets", "masterHTML"], (result) => {
       const snippets = result.snippets || [];
-      const labels = [
-        "HTML Code",
-        "Markdown Code",
-        "BBCode Code",
-        "Reference Code",
-      ];
+      const master = result.masterHTML;
+
+      // 🟢 CHANGE 2: Add Master to the list (Total 5 items)
+      // We use a flag objects to know which one is the Master
+      let itemsToRender = snippets.map((txt, idx) => ({
+        text: txt,
+        label:
+          ["HTML Code", "Markdown Code", "BBCode Code", "Reference Code"][
+            idx
+          ] || "Code",
+        isRich: false,
+      }));
+
+      if (master) {
+        itemsToRender.push({
+          text: master,
+          label: "⭐ Original / Rich Text",
+          isRich: true, // Flag to treat this differently
+        });
+      }
 
       const menu = document.createElement("div");
       menu.id = "qtf-overlay-menu";
@@ -1114,7 +1160,7 @@ document.addEventListener("dblclick", (e) => {
         position: "fixed",
         top: y + "px",
         left: x + "px",
-        zIndex: "2147483648" /* One higher than LinkBuilder */,
+        zIndex: "2147483648",
         backgroundColor: "#fff",
         border: "1px solid #aaa",
         boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
@@ -1128,22 +1174,32 @@ document.addEventListener("dblclick", (e) => {
       });
 
       let hasItems = false;
-      snippets.forEach((text, index) => {
-        if (text && text.trim() !== "") {
+      itemsToRender.forEach((item) => {
+        if (item.text && item.text.trim() !== "") {
           hasItems = true;
-          const item = document.createElement("div");
-          item.className = "qtf-item";
+          const menuEl = document.createElement("div");
+          menuEl.className = "qtf-item";
 
-          item.innerHTML = `
-            <div style="font-weight:bold; color:#2ecc71; font-size:11px; margin-bottom:3px;">${
-              labels[index] || "Code"
-            }</div>
-            <div style="color:#555; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 200px;">${escapeHtml(
-              text
-            )}</div>
+          // For the preview, if it's rich text, we strip tags to keep the menu clean
+          let previewText = item.text;
+          if (item.isRich) {
+            const temp = document.createElement("div");
+            temp.innerHTML = item.text;
+            previewText = temp.textContent || item.text;
+          }
+
+          menuEl.innerHTML = `
+            <div style="font-weight:bold; color:${
+              item.isRich ? "#e67e22" : "#2ecc71"
+            }; font-size:11px; margin-bottom:3px;">
+                ${item.label}
+            </div>
+            <div style="color:#555; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 200px;">
+                ${escapeHtml(previewText)}
+            </div>
           `;
 
-          Object.assign(item.style, {
+          Object.assign(menuEl.style, {
             padding: "8px 15px",
             cursor: "pointer",
             borderBottom: "1px solid #f0f0f0",
@@ -1151,16 +1207,17 @@ document.addEventListener("dblclick", (e) => {
             transition: "background 0.1s",
           });
 
-          item.onmouseenter = () => (item.style.backgroundColor = "#f0fcf0");
-          item.onmouseleave = () => (item.style.backgroundColor = "#fff");
+          menuEl.onmouseenter = () =>
+            (menuEl.style.backgroundColor = "#f0fcf0");
+          menuEl.onmouseleave = () => (menuEl.style.backgroundColor = "#fff");
 
-          item.onmousedown = (e) => {
-            e.preventDefault(); // Prevent input blur
+          menuEl.onmousedown = (e) => {
+            e.preventDefault();
             e.stopPropagation();
-            handleSnippetSelection(text);
+            handleSnippetSelection(item.text, item.isRich);
           };
 
-          menu.appendChild(item);
+          menu.appendChild(menuEl);
         }
       });
 
@@ -1174,7 +1231,6 @@ document.addEventListener("dblclick", (e) => {
 
       document.body.appendChild(menu);
 
-      // Adjust position if off-screen
       const rect = menu.getBoundingClientRect();
       if (rect.right > window.innerWidth)
         menu.style.left = window.innerWidth - rect.width - 20 + "px";
@@ -1197,25 +1253,55 @@ document.addEventListener("dblclick", (e) => {
       .replace(/"/g, "&quot;");
   }
 
-  function handleSnippetSelection(text) {
+  function handleSnippetSelection(text, isRich) {
     removeOverlayMenu();
 
-    // 1. Copy
-    navigator.clipboard.writeText(text).catch((err) => console.log(err));
+    // 1. Copy Logic
+    if (isRich) {
+      // For Rich Text, we try to write HTML to clipboard
+      try {
+        const blobHtml = new Blob([text], { type: "text/html" });
+        const blobText = new Blob([text.replace(/<[^>]*>?/gm, "")], {
+          type: "text/plain",
+        });
+        const data = [
+          new ClipboardItem({
+            ["text/html"]: blobHtml,
+            ["text/plain"]: blobText,
+          }),
+        ];
+        navigator.clipboard.write(data);
+      } catch (e) {
+        // Fallback to plain text if browser blocks rich copy
+        navigator.clipboard.writeText(text);
+      }
+    } else {
+      navigator.clipboard.writeText(text);
+    }
 
     if (typeof toast === "function") toast("✅ Copied & Pasted!");
 
-    // 2. Paste
+    // 2. Paste Logic
     if (currentRightClickTarget) {
-      insertSnippetLogic(currentRightClickTarget, text);
+      insertSnippetLogic(currentRightClickTarget, text, isRich);
     }
   }
 
-  function insertSnippetLogic(target, text) {
+  // 🟢 CHANGE 3: Updated Insertion Logic to handle 'isRich'
+  function insertSnippetLogic(target, text, isRich) {
     target.focus();
+
+    // A. If it's the Master (Rich Text), try insertHTML first to keep the link alive
+    if (isRich) {
+      const success = document.execCommand("insertHTML", false, text);
+      if (success) return;
+    }
+
+    // B. Standard Text Insert
     const success = document.execCommand("insertText", false, text);
     if (success) return;
 
+    // C. Manual Insert (React/Framework fallback)
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
       const proto =
         target.tagName === "INPUT"
@@ -1231,12 +1317,25 @@ document.addEventListener("dblclick", (e) => {
       return;
     }
 
+    // D. ContentEditable Fallback
     if (target.isContentEditable || document.designMode === "on") {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        range.insertNode(document.createTextNode(text));
+
+        if (isRich) {
+          // Insert as HTML elements
+          const temp = document.createElement("div");
+          temp.innerHTML = text;
+          // Insert children one by one or just the text node
+          // Simplest way for range is usually createContextualFragment
+          const frag = range.createContextualFragment(text);
+          range.insertNode(frag);
+        } else {
+          // Insert as plain text
+          range.insertNode(document.createTextNode(text));
+        }
         target.dispatchEvent(new Event("input", { bubbles: true }));
       }
     }
