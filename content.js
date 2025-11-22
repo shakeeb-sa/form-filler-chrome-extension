@@ -3,7 +3,7 @@
 
 let suggestionBox = null;
 
-const style = document.createElement('style');
+const style = document.createElement("style");
 style.textContent = `
   .llb-suggestion {
     position: absolute;
@@ -80,17 +80,17 @@ style.textContent = `
 document.head.appendChild(style);
 
 function toast(msg) {
-  const t = document.createElement('div');
-  t.className = 'llb-toast Marcello';
+  const t = document.createElement("div");
+  t.className = "llb-toast Marcello";
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3300);
 }
 
 function getProfileData() {
-  return new Promise(resolve => {
-    chrome.storage.sync.get(null, items => {
-      const active = items.activeProfile || 'profile1';
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(null, (items) => {
+      const active = items.activeProfile || "profile1";
       resolve({ data: items[active] || {}, profileName: active });
     });
   });
@@ -99,684 +99,897 @@ function getProfileData() {
 function smartFill(el, value) {
   el.focus();
   el.value = value;
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-  el.blur(); 
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  el.blur();
 }
 
 // --- FAKE DATA ENGINE ---
 function generateFake(type) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  
+
   // --- EXISTING FAKE DATA LISTS ---
   const cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"];
   const streets = ["Main St", "Oak Ave", "Maple Dr", "Cedar Ln", "Park Blvd"];
-  const companies = ["TechCorp", "Global Solutions", "Alpha Agency", "NextGen Media"];
-  const titles = ["Marketing Director", "Content Manager", "SEO Specialist", "Owner"];
-  const subjects = ["Inquiry regarding your website", "Collaboration Proposal", "Partnership Opportunity"];
+  const companies = [
+    "TechCorp",
+    "Global Solutions",
+    "Alpha Agency",
+    "NextGen Media",
+  ];
+  const titles = [
+    "Marketing Director",
+    "Content Manager",
+    "SEO Specialist",
+    "Owner",
+  ];
+  const subjects = [
+    "Inquiry regarding your website",
+    "Collaboration Proposal",
+    "Partnership Opportunity",
+  ];
 
   // --- YOUR SPECIFIC HARDCODED VALUES ---
-  if (type === 'dob') return "11/11/2000";
-  if (type === 'gender') return "male";
-  if (type === 'language') return "English";
-  if (type === 'timezone') return "Eastern Time (US & Canada)"; 
-  if (type === 'fax') return "222-211-2911";
-  if (type === 'secondaryEmail') return "info@gmail.com";
-  if (type === 'price') return "10";
-  if (type === 'social') return pick(["https://twitter.com/user", "https://linkedin.com/in/user", "https://facebook.com/user"]);
-  if (type === 'companySize') return pick(["1-10", "11-50", "50-200"]);
-  
-  // Standard Fields
-  if (type === 'city') return pick(cities);
-  if (type === 'address') return `${Math.floor(Math.random() * 9000) + 100} ${pick(streets)}`;
-  if (type === 'billing' || type === 'shipping') return "United States"; 
-  if (type === 'zip') return Math.floor(Math.random() * 90000) + 10000;
-  if (type === 'region') return pick(["CA", "NY", "TX", "FL", "IL"]);
-  if (type === 'country') return "United States";
-  if (type === 'phone') return `+1 ${Math.floor(Math.random() * 800) + 200}-${Math.floor(Math.random() * 800) + 200}-${Math.floor(Math.random() * 8999) + 1000}`;
-  if (type === 'company') return pick(companies);
-  if (type === 'title') return pick(titles);
-  if (type === 'subject') return pick(subjects);
+  if (type === "dob") return "11/11/2000";
+  if (type === "gender") return "male";
+  if (type === "language") return "English";
+  if (type === "timezone") return "Eastern Time (US & Canada)";
+  if (type === "fax") return "222-211-2911";
+  if (type === "secondaryEmail") return "info@gmail.com";
+  if (type === "price") return "10";
+  if (type === "social")
+    return pick([
+      "https://twitter.com/user",
+      "https://linkedin.com/in/user",
+      "https://facebook.com/user",
+    ]);
+  if (type === "companySize") return pick(["1-10", "11-50", "50-200"]);
 
-  return null; 
+  // Standard Fields
+  if (type === "city") return pick(cities);
+  if (type === "address")
+    return `${Math.floor(Math.random() * 9000) + 100} ${pick(streets)}`;
+  if (type === "billing" || type === "shipping") return "United States";
+  if (type === "zip") return Math.floor(Math.random() * 90000) + 10000;
+  if (type === "region") return pick(["CA", "NY", "TX", "FL", "IL"]);
+  if (type === "country") return "United States";
+  if (type === "phone")
+    return `+1 ${Math.floor(Math.random() * 800) + 200}-${
+      Math.floor(Math.random() * 800) + 200
+    }-${Math.floor(Math.random() * 8999) + 1000}`;
+  if (type === "company") return pick(companies);
+  if (type === "title") return pick(titles);
+  if (type === "subject") return pick(subjects);
+
+  return null;
 }
 
 function getFieldType(el) {
-  const str = [el.id, el.name, el.placeholder, el.autocomplete,
-               el.getAttribute('aria-label'), el.labels?.[0]?.textContent,
-               el.closest('label')?.textContent, el.closest('div')?.textContent || '']
-              .join(' ').toLowerCase();
+  const str = [
+    el.id,
+    el.name,
+    el.placeholder,
+    el.autocomplete,
+    el.getAttribute("aria-label"),
+    el.labels?.[0]?.textContent,
+    el.closest("label")?.textContent,
+    el.closest("div")?.textContent || "",
+  ]
+    .join(" ")
+    .toLowerCase();
 
   // Standard checks
-  if (el.type === 'password') return 'password';
-  if (el.type === 'email' || /email|e-mail|mail/i.test(str)) {
-      if (/secondary|alt|backup|other/i.test(str)) return 'secondaryEmail';
-      return 'email';
+  if (el.type === "password") return "password";
+  if (el.type === "email" || /email|e-mail|mail/i.test(str)) {
+    if (/secondary|alt|backup|other/i.test(str)) return "secondaryEmail";
+    return "email";
   }
   if (/website|site|url|domain|link|web.?address/i.test(str)) {
-      if (/social|twitter|facebook|linkedin|instagram/i.test(str)) return 'social';
-      return 'website';
+    if (/social|twitter|facebook|linkedin|instagram/i.test(str))
+      return "social";
+    return "website";
   }
 
   // --- SPECIFIC DETECTORS ---
-  if (/fax/i.test(str)) return 'fax';
-  if (/birth|dob|date.?of.?birth/i.test(str)) return 'dob';
-  if (/gender|sex\b|male|female/i.test(str)) return 'gender';
-  if (/language/i.test(str)) return 'language';
-  if (/time.?zone/i.test(str)) return 'timezone';
-  if (/size|employees|count/i.test(str)) return 'companySize';
-  if (/price|budget|cost|amount/i.test(str)) return 'price';
-  if (/billing/i.test(str)) return 'billing';
-  if (/shipping/i.test(str)) return 'shipping';
+  if (/fax/i.test(str)) return "fax";
+  if (/birth|dob|date.?of.?birth/i.test(str)) return "dob";
+  if (/gender|sex\b|male|female/i.test(str)) return "gender";
+  if (/language/i.test(str)) return "language";
+  if (/time.?zone/i.test(str)) return "timezone";
+  if (/size|employees|count/i.test(str)) return "companySize";
+  if (/price|budget|cost|amount/i.test(str)) return "price";
+  if (/billing/i.test(str)) return "billing";
+  if (/shipping/i.test(str)) return "shipping";
   // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
   // ADD THIS EXACT BLOCK HERE (RIGHT AFTER THE ABOVE LINES)
   // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  if (/category|cat.?id|type.?of.?post|section|classified/i.test(str) || 
-      el.id === 'catId' || el.name === 'catId') {
-    return 'category';
+  if (
+    /category|cat.?id|type.?of.?post|section|classified/i.test(str) ||
+    el.id === "catId" ||
+    el.name === "catId"
+  ) {
+    return "category";
   }
   // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-  
-  if (/username|user.?name|login|handle/i.test(str)) return 'username';
-  if (/company|business|organization/i.test(str)) return 'company';
-  if (/phone|mobile|tel|cell/i.test(str)) return 'phone';
 
-  if (/address|street|location|city|state|province|zip|post.?code|country/i.test(str)) {
-    if (/city|town/i.test(str)) return 'city';
-    if (/state|province|region/i.test(str)) return 'region';
-    if (/zip|post.?code/i.test(str)) return 'zip';
-    if (/country/i.test(str)) return 'country';
-    return 'address';
+  if (/username|user.?name|login|handle/i.test(str)) return "username";
+  if (/company|business|organization/i.test(str)) return "company";
+  if (/phone|mobile|tel|cell/i.test(str)) return "phone";
+
+  if (
+    /address|street|location|city|state|province|zip|post.?code|country/i.test(
+      str
+    )
+  ) {
+    if (/city|town/i.test(str)) return "city";
+    if (/state|province|region/i.test(str)) return "region";
+    if (/zip|post.?code/i.test(str)) return "zip";
+    if (/country/i.test(str)) return "country";
+    return "address";
   }
 
   if (/name|person|contact/i.test(str)) {
-    if (/first|given|fname/i.test(str)) return 'firstName';
-    if (/last|surname|lname/i.test(str)) return 'lastName';
-    return 'firstName'; 
+    if (/first|given|fname/i.test(str)) return "firstName";
+    if (/last|surname|lname/i.test(str)) return "lastName";
+    return "firstName";
   }
 
-  if (/subject|topic|re:/i.test(str)) return 'subject'; 
-  if (/title|headline|job/i.test(str)) return 'title';
+  if (/subject|topic|re:/i.test(str)) return "subject";
+  if (/title|headline|job/i.test(str)) return "title";
 
-  return 'unknown';
+  return "unknown";
 }
 
 // --- INTELLIGENT QUAD-CLICK LOGIC ---
 let clicks = 0;
-document.addEventListener('click', async e => {
-  const isInteractive = e.target.closest('a, button, input, textarea, select, label, [role="button"]');
-  if (isInteractive) return;
-  
-  clicks++;
-  if (clicks === 1) setTimeout(() => clicks = 0, 600);
-  
-  if (clicks === 4) {
-  clicks = 0;
+document.addEventListener(
+  "click",
+  async (e) => {
+    const isInteractive = e.target.closest(
+      'a, button, input, textarea, select, label, [role="button"]'
+    );
+    if (isInteractive) return;
 
-   // MODIFIER COMBINATIONS
-  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey; // Ctrl + 4 clicks
-  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         // Ctrl + Alt + 4 clicks
-  const isHardSelectMode = (e.ctrlKey || e.metaKey) && e.shiftKey;       // Ctrl + Shift + 4 clicks
-  
-  // NEW: Shift + 4 Clicks (Hard Input Mode)
-  const isHardInputMode  = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey; 
-  
-  // Modified: Plain 4 clicks (Regular Fill) - Ensure Shift is NOT held
-  const isRegularFill    = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey; 
+    clicks++;
+    if (clicks === 1) setTimeout(() => (clicks = 0), 600);
 
-  const {data} = await getProfileData();
-  if (!data || Object.keys(data).length === 0) {
-    toast("⚠️ No data saved! Open popup → fill → save");
-    return;
-  }
+    if (clicks === 4) {
+      clicks = 0;
 
-    // ────────────────────────────────
-  //  ★★★ CTRL + ALT + 4 CLICKS = AUTO SUBMIT (ULTRA SAFE VERSION) ★★★
-  // ────────────────────────────────
-  if (isSubmitMode) {
-    const submitKeywords = [
-      'submit', 'post', 'publish', 'register', 'sign up', 'signup', 
-      'login', 'sign in', 'signin', 'create', 'save', 'continue', 
-      'post ad', 'post listing', 'place order', 'complete', 'finish',
-      'proceed', 'next', 'add listing', 'list now'
-    ];
+      // MODIFIER COMBINATIONS
+      const isSelectMode = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey; // Ctrl + 4 clicks
+      const isSubmitMode = (e.ctrlKey || e.metaKey) && e.altKey; // Ctrl + Alt + 4 clicks
+      const isHardSelectMode = (e.ctrlKey || e.metaKey) && e.shiftKey; // Ctrl + Shift + 4 clicks
 
-    const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a[role="button"]'))
-      .filter(btn => {
-        // 1. Must be visible
-        if (!btn.offsetParent || btn.offsetWidth < 30 || btn.offsetHeight < 20) return false;
-        if (btn.disabled) return false;
+      // NEW: Shift + 4 Clicks (Hard Input Mode)
+      const isHardInputMode =
+        e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
 
-        // 2. Text must contain a submit keyword
-        const text = (btn.textContent || btn.value || btn.title || btn.getAttribute('aria-label') || '').toLowerCase().trim();
-        if (!submitKeywords.some(kw => text.includes(kw))) return false;
+      // Modified: Plain 4 clicks (Regular Fill) - Ensure Shift is NOT held
+      const isRegularFill =
+        !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
 
-        // 3. CRITICAL: EXCLUDE ANY BUTTON INSIDE EDITORS OR TOOLBARS
-        const parent = btn.closest('div, span, td, li');
-        if (!parent) return true;
-
-        const parentText = parent.textContent.toLowerCase();
-        const parentClass = (parent.className || '').toLowerCase();
-        const parentId = (parent.id || '').toLowerCase();
-
-        // Blacklist known editor toolbar patterns
-        const blacklist = [
-          'mce', 'cke', 'tox', 'ql-', 'editor', 'toolbar', 'format', 'bold', 'italic', 'bullet', 'list',
-          'wp-', 'admin', 'dashboard', 'menu', 'nav', 'sidebar', 'header', 'footer', 'modal', 'popup'
-        ];
-
-        if (blacklist.some(term => parentClass.includes(term) || parentId.includes(term))) {
-          return false;
-        }
-
-        // Extra safety: if button is tiny or inside a <b>, <strong>, <i>, etc. → skip
-        if (btn.closest('b, strong, i, em, u, span[style*="bold"], div[style*="font-weight"]')) return false;
-
-        return true;
-      });
-
-    if (buttons.length > 0) {
-      const target = buttons[0];
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => {
-        target.click();
-        toast(`Submitted: "${target.textContent.trim() || target.value}"`);
-      }, 500);
-    } else {
-      toast("No real submit button found");
-    }
-
-    return; // Stops everything else — 100% isolated
-  }
+      const { data } = await getProfileData();
+      if (!data || Object.keys(data).length === 0) {
+        toast("⚠️ No data saved! Open popup → fill → save");
+        return;
+      }
 
       // ────────────────────────────────
-    //  ★★★ CTRL + SHIFT + 4 CLICKS = HARD SELECT (CLEANUP MODE) ★★★
-    // ────────────────────────────────
-    if (isHardSelectMode) {
-      let fixedCount = 0;
-      const allSelects = Array.from(document.querySelectorAll('select'));
+      //  ★★★ CTRL + ALT + 4 CLICKS = AUTO SUBMIT (ULTRA SAFE VERSION) ★★★
+      // ────────────────────────────────
+      if (isSubmitMode) {
+        const submitKeywords = [
+          "submit",
+          "post",
+          "publish",
+          "register",
+          "sign up",
+          "signup",
+          "login",
+          "sign in",
+          "signin",
+          "create",
+          "save",
+          "continue",
+          "post ad",
+          "post listing",
+          "place order",
+          "complete",
+          "finish",
+          "proceed",
+          "next",
+          "add listing",
+          "list now",
+        ];
 
-      // Helper to fire events
-      const fireEvents = (el) => {
-        try {
-            el.dispatchEvent(new Event('focus', { bubbles: true }));
-            el.dispatchEvent(new Event('click', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
-        } catch (e) {}
-      };
+        const buttons = Array.from(
+          document.querySelectorAll(
+            'button, input[type="submit"], input[type="button"], a[role="button"]'
+          )
+        ).filter((btn) => {
+          // 1. Must be visible
+          if (
+            !btn.offsetParent ||
+            btn.offsetWidth < 30 ||
+            btn.offsetHeight < 20
+          )
+            return false;
+          if (btn.disabled) return false;
 
-      allSelects.forEach(el => {
-        // 1. Safety Checks: Must be visible and enabled
-        if (el.disabled || el.offsetParent === null) return;
+          // 2. Text must contain a submit keyword
+          const text = (
+            btn.textContent ||
+            btn.value ||
+            btn.title ||
+            btn.getAttribute("aria-label") ||
+            ""
+          )
+            .toLowerCase()
+            .trim();
+          if (!submitKeywords.some((kw) => text.includes(kw))) return false;
 
-        // 2. Check if it's already filled
-        // We consider it "Empty" if value is blank OR text says "Select/Choose"
-        const currentTxt = (el.options[el.selectedIndex]?.text || "").toLowerCase();
-        const currentVal = el.value;
-        const isFilled = currentVal !== "" && 
-                         !currentTxt.includes("select") && 
-                         !currentTxt.includes("choose") && 
-                         !currentTxt.includes("none");
+          // 3. CRITICAL: EXCLUDE ANY BUTTON INSIDE EDITORS OR TOOLBARS
+          const parent = btn.closest("div, span, td, li");
+          if (!parent) return true;
 
-        if (isFilled) return; // Don't touch what the Core Logic already did!
+          const parentText = parent.textContent.toLowerCase();
+          const parentClass = (parent.className || "").toLowerCase();
+          const parentId = (parent.id || "").toLowerCase();
 
-        // 3. Find a valid option to pick
-        const validIndices = [];
-        for (let i = 0; i < el.options.length; i++) {
-            const txt = (el.options[i].text || "").toLowerCase();
-            const val = el.options[i].value;
-            
-            // Must not be disabled, empty, or a placeholder label
-            if (!el.options[i].disabled && val !== "" && 
-                !txt.includes("select") && !txt.includes("choose")) {
-                validIndices.push(i);
-            }
+          // Blacklist known editor toolbar patterns
+          const blacklist = [
+            "mce",
+            "cke",
+            "tox",
+            "ql-",
+            "editor",
+            "toolbar",
+            "format",
+            "bold",
+            "italic",
+            "bullet",
+            "list",
+            "wp-",
+            "admin",
+            "dashboard",
+            "menu",
+            "nav",
+            "sidebar",
+            "header",
+            "footer",
+            "modal",
+            "popup",
+          ];
+
+          if (
+            blacklist.some(
+              (term) => parentClass.includes(term) || parentId.includes(term)
+            )
+          ) {
+            return false;
+          }
+
+          // Extra safety: if button is tiny or inside a <b>, <strong>, <i>, etc. → skip
+          if (
+            btn.closest(
+              'b, strong, i, em, u, span[style*="bold"], div[style*="font-weight"]'
+            )
+          )
+            return false;
+
+          return true;
+        });
+
+        if (buttons.length > 0) {
+          const target = buttons[0];
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          setTimeout(() => {
+            target.click();
+            toast(`Submitted: "${target.textContent.trim() || target.value}"`);
+          }, 500);
+        } else {
+          toast("No real submit button found");
         }
 
-        // 4. Select Random Valid Option
-        if (validIndices.length > 0) {
-            const randomIdx = validIndices[Math.floor(Math.random() * validIndices.length)];
+        return; // Stops everything else — 100% isolated
+      }
+
+      // ────────────────────────────────
+      //  ★★★ CTRL + SHIFT + 4 CLICKS = HARD SELECT (CLEANUP MODE) ★★★
+      // ────────────────────────────────
+      if (isHardSelectMode) {
+        let fixedCount = 0;
+        const allSelects = Array.from(document.querySelectorAll("select"));
+
+        // Helper to fire events
+        const fireEvents = (el) => {
+          try {
+            el.dispatchEvent(new Event("focus", { bubbles: true }));
+            el.dispatchEvent(new Event("click", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("blur", { bubbles: true }));
+          } catch (e) {}
+        };
+
+        allSelects.forEach((el) => {
+          // 1. Safety Checks: Must be visible and enabled
+          if (el.disabled || el.offsetParent === null) return;
+
+          // 2. Check if it's already filled
+          // We consider it "Empty" if value is blank OR text says "Select/Choose"
+          const currentTxt = (
+            el.options[el.selectedIndex]?.text || ""
+          ).toLowerCase();
+          const currentVal = el.value;
+          const isFilled =
+            currentVal !== "" &&
+            !currentTxt.includes("select") &&
+            !currentTxt.includes("choose") &&
+            !currentTxt.includes("none");
+
+          if (isFilled) return; // Don't touch what the Core Logic already did!
+
+          // 3. Find a valid option to pick
+          const validIndices = [];
+          for (let i = 0; i < el.options.length; i++) {
+            const txt = (el.options[i].text || "").toLowerCase();
+            const val = el.options[i].value;
+
+            // Must not be disabled, empty, or a placeholder label
+            if (
+              !el.options[i].disabled &&
+              val !== "" &&
+              !txt.includes("select") &&
+              !txt.includes("choose")
+            ) {
+              validIndices.push(i);
+            }
+          }
+
+          // 4. Select Random Valid Option
+          if (validIndices.length > 0) {
+            const randomIdx =
+              validIndices[Math.floor(Math.random() * validIndices.length)];
             el.selectedIndex = randomIdx;
             fireEvents(el);
             fixedCount++;
-        } else if (el.options.length > 1) {
+          } else if (el.options.length > 1) {
             // Desperation move: just pick index 1 if logic fails
             el.selectedIndex = 1;
             fireEvents(el);
             fixedCount++;
-        }
-      });
+          }
+        });
 
-      if (fixedCount > 0) toast(`🧹 Hard Select: Filled ${fixedCount} missed dropdowns!`);
-      else toast("✅ All dropdowns appear to be filled.");
-      
-      return; // Stop here
-    }
+        if (fixedCount > 0)
+          toast(`🧹 Hard Select: Filled ${fixedCount} missed dropdowns!`);
+        else toast("✅ All dropdowns appear to be filled.");
 
-        // ────────────────────────────────
-    //  ★★★ SHIFT + 4 CLICKS = HARD INPUT (CLEANUP TEXT) ★★★
-    // ────────────────────────────────
-    if (isHardInputMode) {
-      let filledCount = 0;
-      
-      const inputs = document.querySelectorAll('input, textarea');
-      
-      inputs.forEach(el => {
-        // 1. Safety Checks
-        if (el.readOnly || el.disabled || el.type === 'hidden' || el.offsetParent === null) return;
-        const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'file', 'checkbox', 'radio'];
-        if (forbiddenTypes.includes(el.type)) return;
-
-        // 2. Only target EMPTY fields
-        if (el.value && el.value.trim() !== "") return; // Don't overwrite existing work!
-
-        // 3. Determine Value
-        const type = getFieldType(el);
-        let fakeVal = generateFake(type);
-
-        // Fallback if generateFake returns null (e.g., unknown text fields)
-        if (!fakeVal) {
-            if (type === 'email') fakeVal = "info@example.com";
-            else if (type === 'phone') fakeVal = "555-0123";
-            else if (type === 'number') fakeVal = "1";
-            else fakeVal = "N/A"; // Safe fallback for unknown text areas
-        }
-
-        // 4. Force Fill
-        smartFill(el, fakeVal);
-        filledCount++;
-      });
-
-      if (filledCount > 0) toast(`✍️ Hard Fill: Force filled ${filledCount} empty inputs!`);
-      else toast("✅ All text fields appear to be filled.");
-      
-      return; // Stop here
-    }
-
-    // ============================================================
-    // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
-    // ============================================================
-          if (isSelectMode) {
-      const allSelects = Array.from(document.querySelectorAll('select'));
-      if (allSelects.length === 0) {
-        toast("⚠️ No dropdowns found.");
-        return;
+        return; // Stop here
       }
 
-      // --- HELPER: FIRE EVENTS (Trigger UI Updates) ---
-      const fireEvents = (el) => {
-        try {
-          el.dispatchEvent(new Event('focus', { bubbles: true }));
-          el.dispatchEvent(new Event('click', { bubbles: true })); // Added click
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('blur', { bubbles: true }));
-        } catch (e) { console.log(e); }
-      };
+      // ────────────────────────────────
+      //  ★★★ SHIFT + 4 CLICKS = HARD INPUT (CLEANUP TEXT) ★★★
+      // ────────────────────────────────
+      if (isHardInputMode) {
+        let filledCount = 0;
 
-      // --- HELPER: ROBUST MATCHER ---
-      const processSingleSelect = (element, forcedType = null) => {
-        // Unhide element if it's hidden (Fixes opacity: 0 issue)
-        if (element.style.opacity === '0') element.style.opacity = '1';
-        if (element.style.visibility === 'hidden') element.style.visibility = 'visible';
+        const inputs = document.querySelectorAll("input, textarea");
 
-        // 1. PRIORITY: USA
-        if (forcedType === 'country') {
-          for (let i = 0; i < element.options.length; i++) {
-            const t = (element.options[i].text || "").toLowerCase().trim();
-            if (['united states', 'usa', 'us'].includes(t)) {
-              element.selectedIndex = i;
-              fireEvents(element);
-              return true;
+        inputs.forEach((el) => {
+          // 1. Safety Checks
+          if (
+            el.readOnly ||
+            el.disabled ||
+            el.type === "hidden" ||
+            el.offsetParent === null
+          )
+            return;
+          const forbiddenTypes = [
+            "submit",
+            "button",
+            "image",
+            "reset",
+            "file",
+            "checkbox",
+            "radio",
+          ];
+          if (forbiddenTypes.includes(el.type)) return;
+
+          // 2. Only target EMPTY fields
+          if (el.value && el.value.trim() !== "") return; // Don't overwrite existing work!
+
+          // 3. Determine Value
+          const type = getFieldType(el);
+          let fakeVal = generateFake(type);
+
+          // Fallback if generateFake returns null (e.g., unknown text fields)
+          if (!fakeVal) {
+            if (type === "email") fakeVal = "info@example.com";
+            else if (type === "phone") fakeVal = "555-0123";
+            else if (type === "number") fakeVal = "1";
+            else fakeVal = "N/A"; // Safe fallback for unknown text areas
+          }
+
+          // 4. Force Fill
+          smartFill(el, fakeVal);
+          filledCount++;
+        });
+
+        if (filledCount > 0)
+          toast(`✍️ Hard Fill: Force filled ${filledCount} empty inputs!`);
+        else toast("✅ All text fields appear to be filled.");
+
+        return; // Stop here
+      }
+
+      // ============================================================
+      // MODE 1: SMART DROPDOWN SEQUENCE (CTRL + 4 CLICKS)
+      // ============================================================
+      if (isSelectMode) {
+        const allSelects = Array.from(document.querySelectorAll("select"));
+        if (allSelects.length === 0) {
+          toast("⚠️ No dropdowns found.");
+          return;
+        }
+
+        // --- HELPER: FIRE EVENTS (Trigger UI Updates) ---
+        const fireEvents = (el) => {
+          try {
+            el.dispatchEvent(new Event("focus", { bubbles: true }));
+            el.dispatchEvent(new Event("click", { bubbles: true })); // Added click
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("blur", { bubbles: true }));
+          } catch (e) {
+            console.log(e);
+          }
+        };
+
+        // --- HELPER: ROBUST MATCHER ---
+        const processSingleSelect = (element, forcedType = null) => {
+          // Unhide element if it's hidden (Fixes opacity: 0 issue)
+          if (element.style.opacity === "0") element.style.opacity = "1";
+          if (element.style.visibility === "hidden")
+            element.style.visibility = "visible";
+
+          // 1. PRIORITY: USA
+          if (forcedType === "country") {
+            for (let i = 0; i < element.options.length; i++) {
+              const t = (element.options[i].text || "").toLowerCase().trim();
+              if (["united states", "usa", "us"].includes(t)) {
+                element.selectedIndex = i;
+                fireEvents(element);
+                return true;
+              }
             }
           }
-        }
 
-        // 2. GET DATA
-        const type = forcedType || getFieldType(element);
-        let userVal = null;
-        if (type === 'region') userVal = (data['region'] || data['state'] || data['province'] || "");
-        else userVal = data[type] || "";
-        
-        userVal = userVal.toLowerCase().trim();
-        if (!userVal) return false;
+          // 2. GET DATA
+          const type = forcedType || getFieldType(element);
+          let userVal = null;
+          if (type === "region")
+            userVal = data["region"] || data["state"] || data["province"] || "";
+          else userVal = data[type] || "";
 
-        // 3. FIND BEST MATCH
-        // We look for the option that matches the user's input best
-        let bestMatchIndex = -1;
-        
-        for (let i = 0; i < element.options.length; i++) {
-          const optText = (element.options[i].text || "").toLowerCase().trim();
-          const optVal = (element.options[i].value || "").toLowerCase().trim();
-          if (optVal === "" || optText.includes("select")) continue; // Skip placeholders
+          userVal = userVal.toLowerCase().trim();
+          if (!userVal) return false;
 
-          // A. Exact Match (Highest Priority)
-          if (optText === userVal || optVal === userVal) {
-            bestMatchIndex = i;
-            break; // Stop looking, we found perfection
+          // 3. FIND BEST MATCH
+          // We look for the option that matches the user's input best
+          let bestMatchIndex = -1;
+
+          for (let i = 0; i < element.options.length; i++) {
+            const optText = (element.options[i].text || "")
+              .toLowerCase()
+              .trim();
+            const optVal = (element.options[i].value || "")
+              .toLowerCase()
+              .trim();
+            if (optVal === "" || optText.includes("select")) continue; // Skip placeholders
+
+            // A. Exact Match (Highest Priority)
+            if (optText === userVal || optVal === userVal) {
+              bestMatchIndex = i;
+              break; // Stop looking, we found perfection
+            }
+
+            // B. "New York City" vs "New York" Match
+            // If User says "New York City", but Option is "New York" -> Match
+            // If User says "New York", but Option is "New York City" -> Match
+            const userSimple = userVal.replace(/\bcity\b/g, "").trim();
+            const optSimple = optText.replace(/\bcity\b/g, "").trim();
+
+            if (userSimple === optSimple && userSimple.length > 2) {
+              bestMatchIndex = i;
+            }
           }
 
-          // B. "New York City" vs "New York" Match
-          // If User says "New York City", but Option is "New York" -> Match
-          // If User says "New York", but Option is "New York City" -> Match
-          const userSimple = userVal.replace(/\bcity\b/g, '').trim();
-          const optSimple = optText.replace(/\bcity\b/g, '').trim();
-          
-          if (userSimple === optSimple && userSimple.length > 2) {
-             bestMatchIndex = i;
+          if (bestMatchIndex > -1) {
+            element.selectedIndex = bestMatchIndex;
+            element.options[bestMatchIndex].selected = true; // Force selection state
+            fireEvents(element);
+            toast(`✅ Found: ${element.options[bestMatchIndex].text}`);
+            return true;
           }
-        }
 
-        if (bestMatchIndex > -1) {
-          element.selectedIndex = bestMatchIndex;
-          element.options[bestMatchIndex].selected = true; // Force selection state
-          fireEvents(element);
-          toast(`✅ Found: ${element.options[bestMatchIndex].text}`);
-          return true;
-        }
+          return false;
+        };
 
-        return false;
-      };
+        // --- HELPER: WAIT FOR LIST TO POPULATE ---
+        const waitForOptions = async (element) => {
+          let attempts = 0;
+          // Wait while options are less than 2 (usually just "Select...")
+          while (element.options.length < 2 && attempts < 30) {
+            await wait(200); // Check every 200ms
+            attempts++;
+            // Pulse opacity to show it's "thinking"
+            element.style.opacity = attempts % 2 === 0 ? "0.5" : "1";
+          }
+          element.style.opacity = "1"; // Ensure visible
+        };
 
-      // --- HELPER: WAIT FOR LIST TO POPULATE ---
-      const waitForOptions = async (element) => {
-        let attempts = 0;
-        // Wait while options are less than 2 (usually just "Select...")
-        while (element.options.length < 2 && attempts < 30) { 
-          await wait(200); // Check every 200ms
-          attempts++;
-          // Pulse opacity to show it's "thinking"
-          element.style.opacity = (attempts % 2 === 0) ? '0.5' : '1';
-        }
-        element.style.opacity = '1'; // Ensure visible
-      };
+        // --- IDENTIFY DROPDOWNS ---
+        let countryEl = null,
+          regionEl = null,
+          cityEl = null,
+          otherSelects = [];
+        allSelects.forEach((s) => {
+          if (s.disabled) return; // Don't select disabled initially
+          let type = getFieldType(s);
+          const nameStr = (s.id + " " + s.name).toLowerCase();
 
-      // --- IDENTIFY DROPDOWNS ---
-      let countryEl = null, regionEl = null, cityEl = null, otherSelects = [];
-      allSelects.forEach(s => {
-        if (s.disabled) return; // Don't select disabled initially
-        let type = getFieldType(s);
-        const nameStr = (s.id + " " + s.name).toLowerCase();
-        
-        // Strict ID checks because getFieldType can be fuzzy
-        if (nameStr.includes('country')) type = 'country';
-        else if (nameStr.includes('state') || nameStr.includes('region')) type = 'region';
-        else if (nameStr.includes('city')) type = 'city';
+          // Strict ID checks because getFieldType can be fuzzy
+          if (nameStr.includes("country")) type = "country";
+          else if (nameStr.includes("state") || nameStr.includes("region"))
+            type = "region";
+          else if (nameStr.includes("city")) type = "city";
 
-        if (type === 'country') countryEl = s;
-        else if (type === 'region') regionEl = s;
-        else if (type === 'city') cityEl = s;
-        else otherSelects.push({ el: s, type: type });
-      });
+          if (type === "country") countryEl = s;
+          else if (type === "region") regionEl = s;
+          else if (type === "city") cityEl = s;
+          else otherSelects.push({ el: s, type: type });
+        });
 
-      // --- EXECUTE SEQUENCE ---
-            // --- EXECUTE SEQUENCE ---
-      (async () => {
-
-        // === NEW: CATEGORY-ONLY LOGIC (runs first, leaves everything else untouched) ===
-        if (data.category) {
-            const categorySelect = allSelects.find(s => 
-                getFieldType(s) === 'category' || 
+        // --- EXECUTE SEQUENCE ---
+        // --- EXECUTE SEQUENCE ---
+        (async () => {
+          // === NEW: CATEGORY-ONLY LOGIC (runs first, leaves everything else untouched) ===
+          if (data.category) {
+            const categorySelect = allSelects.find(
+              (s) =>
+                getFieldType(s) === "category" ||
                 /cat.?id|category/i.test(s.id + s.name)
             );
 
             if (categorySelect) {
-                toast("Setting Category...");
-                
-                if (categorySelect.disabled) categorySelect.disabled = false;
-                if (categorySelect.style.opacity === '0') categorySelect.style.opacity = '1';
+              toast("Setting Category...");
 
-                const target = data.category.trim().toLowerCase();
-                let found = false;
+              if (categorySelect.disabled) categorySelect.disabled = false;
+              if (categorySelect.style.opacity === "0")
+                categorySelect.style.opacity = "1";
 
+              const target = data.category.trim().toLowerCase();
+              let found = false;
+
+              for (let i = 0; i < categorySelect.options.length; i++) {
+                const text = categorySelect.options[i].textContent
+                  .trim()
+                  .toLowerCase()
+                  .replace(/^[-\s>&nbsp;]+/g, "");
+
+                if (
+                  text.includes(target) ||
+                  target.includes(
+                    text.replace(/services|opportunities/gi, "").trim()
+                  )
+                ) {
+                  categorySelect.selectedIndex = i;
+                  fireEvents(categorySelect);
+                  toast(
+                    `Category → ${categorySelect.options[i].textContent.trim()}`
+                  );
+                  found = true;
+                  break;
+                }
+              }
+
+              if (!found) {
+                const fallbackTexts = [
+                  /other/i,
+                  /general/i,
+                  /everything else/i,
+                  /misc/i,
+                  /all categories/i,
+                ];
                 for (let i = 0; i < categorySelect.options.length; i++) {
-                    const text = categorySelect.options[i].textContent.trim().toLowerCase()
-                                      .replace(/^[-\s>&nbsp;]+/g, '');
-
-                    if (text.includes(target) || target.includes(text.replace(/services|opportunities/gi, '').trim())) {
-                        categorySelect.selectedIndex = i;
-                        fireEvents(categorySelect);
-                        toast(`Category → ${categorySelect.options[i].textContent.trim()}`);
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found) {
-                    const fallbackTexts = [/other/i, /general/i, /everything else/i, /misc/i, /all categories/i];
-                    for (let i = 0; i < categorySelect.options.length; i++) {
-                        const txt = categorySelect.options[i].textContent.toLowerCase();
-                        if (fallbackTexts.some(re => re.test(txt))) {
-                            categorySelect.selectedIndex = i;
-                            fireEvents(categorySelect);
-                            toast(`Fallback → ${categorySelect.options[i].textContent.trim()}`);
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!found && categorySelect.options.length > 2) {
-                    categorySelect.selectedIndex = 2;
+                  const txt =
+                    categorySelect.options[i].textContent.toLowerCase();
+                  if (fallbackTexts.some((re) => re.test(txt))) {
+                    categorySelect.selectedIndex = i;
                     fireEvents(categorySelect);
-                    toast("Picked random category");
+                    toast(
+                      `Fallback → ${categorySelect.options[
+                        i
+                      ].textContent.trim()}`
+                    );
+                    found = true;
+                    break;
+                  }
                 }
+              }
 
-                await wait(1200);
+              if (!found && categorySelect.options.length > 2) {
+                categorySelect.selectedIndex = 2;
+                fireEvents(categorySelect);
+                toast("Picked random category");
+              }
+
+              await wait(1200);
             }
-        }
-        // === END OF CATEGORY LOGIC ===
+          }
+          // === END OF CATEGORY LOGIC ===
 
-        // 1. Country
-        if (countryEl) {
-          toast("Setting Country...");
-          processSingleSelect(countryEl, 'country');
-          
-          toast("Waiting 1s for State/Region...");
-          await wait(1000); 
-        }
-        // ... rest of your original code continues perfectly ...
-        
-        
-        // 1. Country
-        if (countryEl) {
-          toast("🇺🇸 Setting Country...");
-          processSingleSelect(countryEl, 'country');
-          
-          // HARD WAIT: 3 Seconds for Region list to load
-          toast("⏳ Waiting 1s for State/Region...");
-          await wait(1000); 
-        }
+          // 1. Country
+          if (countryEl) {
+            toast("Setting Country...");
+            processSingleSelect(countryEl, "country");
 
-        // 2. Region
-        if (regionEl) {
-          // Ensure it's enabled
-          if(regionEl.disabled) regionEl.disabled = false;
-          
-          // Double check: ensure options are actually there
-          await waitForOptions(regionEl); 
+            toast("Waiting 1s for State/Region...");
+            await wait(1000);
+          }
+          // ... rest of your original code continues perfectly ...
 
-          toast("🗺️ Setting Region...");
-          processSingleSelect(regionEl, 'region');
-          
-          // HARD WAIT: 3 Seconds for City list to load
-          toast("⏳ Waiting 1s for Cities...");
-          await wait(1000); 
-        }
+          // 1. Country
+          if (countryEl) {
+            toast("🇺🇸 Setting Country...");
+            processSingleSelect(countryEl, "country");
 
-        // 3. City
-        if (cityEl) {
-          // Ensure it's enabled
-          if(cityEl.disabled) cityEl.disabled = false;
-          
-          // Double check: ensure options are actually there
-          await waitForOptions(cityEl);
+            // HARD WAIT: 3 Seconds for Region list to load
+            toast("⏳ Waiting 1s for State/Region...");
+            await wait(1000);
+          }
 
-          toast("🏙️ Setting City...");
-          const found = processSingleSelect(cityEl, 'city');
-          
-          if (!found) {
-            // Fallback if specific city not found
-            toast("🎲 City not found, picking random...");
-            if (cityEl.options.length > 1) {
-                cityEl.selectedIndex = Math.floor(Math.random() * (cityEl.options.length - 1)) + 1;
+          // 2. Region
+          if (regionEl) {
+            // Ensure it's enabled
+            if (regionEl.disabled) regionEl.disabled = false;
+
+            // Double check: ensure options are actually there
+            await waitForOptions(regionEl);
+
+            toast("🗺️ Setting Region...");
+            processSingleSelect(regionEl, "region");
+
+            // HARD WAIT: 3 Seconds for City list to load
+            toast("⏳ Waiting 1s for Cities...");
+            await wait(1000);
+          }
+
+          // 3. City
+          if (cityEl) {
+            // Ensure it's enabled
+            if (cityEl.disabled) cityEl.disabled = false;
+
+            // Double check: ensure options are actually there
+            await waitForOptions(cityEl);
+
+            toast("🏙️ Setting City...");
+            const found = processSingleSelect(cityEl, "city");
+
+            if (!found) {
+              // Fallback if specific city not found
+              toast("🎲 City not found, picking random...");
+              if (cityEl.options.length > 1) {
+                cityEl.selectedIndex =
+                  Math.floor(Math.random() * (cityEl.options.length - 1)) + 1;
                 fireEvents(cityEl);
+              }
             }
           }
-        }
 
-        // 4. Others
-        otherSelects.forEach(o => processSingleSelect(o.el, o.type));
+          // 4. Others
+          otherSelects.forEach((o) => processSingleSelect(o.el, o.type));
 
-                // CHECK FOR LEFTOVERS
-        const remainingMissed = Array.from(document.querySelectorAll('select')).filter(s => {
-            if(s.disabled || s.offsetParent === null) return false;
+          // CHECK FOR LEFTOVERS
+          const remainingMissed = Array.from(
+            document.querySelectorAll("select")
+          ).filter((s) => {
+            if (s.disabled || s.offsetParent === null) return false;
             const txt = (s.options[s.selectedIndex]?.text || "").toLowerCase();
-            return s.value === "" || txt.includes('select') || txt.includes('choose');
-        });
+            return (
+              s.value === "" || txt.includes("select") || txt.includes("choose")
+            );
+          });
 
-        if (remainingMissed.length > 0) {
-            toast(`⚡ Done! (⚠️ ${remainingMissed.length} missed → Use Ctrl+Shift+Click)`);
-        } else {
-            toast(`⚡ Sequence Complete!`);
-        }
-      })();
-
-      return;
-    }
-
-    
-    // ============================================================
-    // MODE 2: TEXT FIELDS & INPUTS (STANDARD 4 CLICKS)
-    // ============================================================
-    let filled = 0;
-    let checked = 0;
-
-    document.querySelectorAll('input, textarea').forEach(el => {
-      if (el.readOnly || el.disabled) return;
-      const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'];
-      if (forbiddenTypes.includes(el.type)) return;
-
-      let type = getFieldType(el);
-      let valueToFill = null;
-
-      if (data[type] && data[type].trim() !== "") {
-          valueToFill = data[type];
-      } else {
-          if(type === 'subject' && data['title']) {
-             valueToFill = data['title'];
+          if (remainingMissed.length > 0) {
+            toast(
+              `⚡ Done! (⚠️ ${remainingMissed.length} missed → Use Ctrl+Shift+Click)`
+            );
           } else {
-             valueToFill = generateFake(type);
+            toast(`⚡ Sequence Complete!`);
           }
+        })();
+
+        return;
       }
 
-      if (valueToFill) {
-        smartFill(el, valueToFill);
-        filled++;
+      // ============================================================
+      // MODE 2: TEXT FIELDS & INPUTS (STANDARD 4 CLICKS)
+      // ============================================================
+      let filled = 0;
+      let checked = 0;
+
+      document.querySelectorAll("input, textarea").forEach((el) => {
+        if (el.readOnly || el.disabled) return;
+        const forbiddenTypes = [
+          "submit",
+          "button",
+          "image",
+          "reset",
+          "hidden",
+          "file",
+          "checkbox",
+          "radio",
+        ];
+        if (forbiddenTypes.includes(el.type)) return;
+
+        let type = getFieldType(el);
+        let valueToFill = null;
+
+        if (data[type] && data[type].trim() !== "") {
+          valueToFill = data[type];
+        } else {
+          if (type === "subject" && data["title"]) {
+            valueToFill = data["title"];
+          } else {
+            valueToFill = generateFake(type);
+          }
+        }
+
+        if (valueToFill) {
+          smartFill(el, valueToFill);
+          filled++;
+        } else {
+          smartFill(el, "Business");
+          filled++;
+        }
+      });
+
+      // Checkbox Handling
+      document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        if (cb.disabled || cb.checked) return;
+        const label = (
+          cb.closest("label")?.textContent ||
+          cb.parentElement?.textContent ||
+          cb.getAttribute("aria-label") ||
+          ""
+        ).toLowerCase();
+        if (
+          /agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(
+            label
+          )
+        ) {
+          cb.checked = true;
+          cb.dispatchEvent(new Event("change", { bubbles: true }));
+          checked++;
+        }
+      });
+
+      // ... (smartFill logic above remains the same) ...
+
+      // CHECK FOR EMPTY INPUTS
+      const missedInputs = Array.from(
+        document.querySelectorAll(
+          'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea'
+        )
+      ).filter(
+        (el) =>
+          !el.disabled &&
+          !el.readOnly &&
+          el.offsetParent !== null &&
+          el.value === ""
+      );
+
+      if (missedInputs.length > 0) {
+        toast(
+          `⚡ Filled ${filled} | ${checked} Boxes (⚠️ ${missedInputs.length} empty → Use Shift+Click)`
+        );
       } else {
-        smartFill(el, "Business");
-        filled++;
+        toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes!`);
       }
-    });
-
-    // Checkbox Handling
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      if (cb.disabled || cb.checked) return;
-      const label = (cb.closest('label')?.textContent || cb.parentElement?.textContent || cb.getAttribute('aria-label') || '').toLowerCase();
-      if (/agree|accept|consent|terms|privacy|policy|newsletter|confirmation|subscribe|yes|opt.?in/i.test(label)) {
-        cb.checked = true;
-        cb.dispatchEvent(new Event('change', { bubbles: true }));
-        checked++;
-      }
-    });
-
-        // ... (smartFill logic above remains the same) ...
-
-    // CHECK FOR EMPTY INPUTS
-    const missedInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea'))
-        .filter(el => !el.disabled && !el.readOnly && el.offsetParent !== null && el.value === "");
-
-    if (missedInputs.length > 0) {
-       toast(`⚡ Filled ${filled} | ${checked} Boxes (⚠️ ${missedInputs.length} empty → Use Shift+Click)`);
-    } else {
-       toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes!`);
-    }
-  } // End of isRegularFill block
-}, true);
+    } // End of isRegularFill block
+  },
+  true
+);
 
 // --- MANUAL CLICK MENU ---
-document.addEventListener('focusin', async e => {
+document.addEventListener("focusin", async (e) => {
   const input = e.target;
-  if (!['INPUT','TEXTAREA','SELECT'].includes(input.tagName)) return;
-  if (['submit', 'button', 'image', 'reset', 'hidden', 'file', 'checkbox', 'radio'].includes(input.type)) return;
+  if (!["INPUT", "TEXTAREA", "SELECT"].includes(input.tagName)) return;
+  if (
+    [
+      "submit",
+      "button",
+      "image",
+      "reset",
+      "hidden",
+      "file",
+      "checkbox",
+      "radio",
+    ].includes(input.type)
+  )
+    return;
 
-  const {data} = await getProfileData();
+  const { data } = await getProfileData();
   if (!data || Object.keys(data).length === 0) return;
 
   if (suggestionBox) suggestionBox.remove();
 
-    suggestionBox = document.createElement('div');
-  suggestionBox.className = 'llb-suggestion';
-  
+  suggestionBox = document.createElement("div");
+  suggestionBox.className = "llb-suggestion";
+
   suggestionBox.innerHTML = `
     <div class="llb-header" style="display: flex; justify-content: space-between; align-items: center;">
         <span>⚡ Choose Value</span>
         <span id="llb-close-btn" style="cursor: pointer; font-size: 24px; line-height: 20px; opacity: 0.8;">&times;</span>
     </div>`;
 
-  suggestionBox.querySelector('#llb-close-btn').addEventListener('click', (e) => {
-      e.stopPropagation(); 
+  suggestionBox
+    .querySelector("#llb-close-btn")
+    .addEventListener("click", (e) => {
+      e.stopPropagation();
       suggestionBox.remove();
       suggestionBox = null;
-  });
+    });
 
-    const fields = [
-    {key: 'firstName', label: 'First Name'},
-    {key: 'lastName', label: 'Last Name'},
-    {key: 'email', label: 'Email'},
-    {key: 'username', label: 'Username'},
-    {key: 'password', label: 'Password'},
-    {key: 'company', label: 'Company / Site'},
-    {key: 'title', label: 'Title / Subject'},
-    {key: 'website', label: 'Website URL'},
-    {key: 'phone', label: 'Phone'},
-    {key: 'address', label: 'Address'},
-    {key: 'city', label: 'City'},
-    {key: 'region', label: 'Region / State'},
-    {key: 'zip', label: 'Zip / Postal'},
-    {key: 'fake', label: '🎲 Generate Fake for this field'}
+  const fields = [
+    { key: "firstName", label: "First Name" },
+    { key: "lastName", label: "Last Name" },
+    { key: "email", label: "Email" },
+    { key: "username", label: "Username" },
+    { key: "password", label: "Password" },
+    { key: "company", label: "Company / Site" },
+    { key: "title", label: "Title / Subject" },
+    { key: "website", label: "Website URL" },
+    { key: "phone", label: "Phone" },
+    { key: "address", label: "Address" },
+    { key: "city", label: "City" },
+    { key: "region", label: "Region / State" },
+    { key: "zip", label: "Zip / Postal" },
+    { key: "fake", label: "🎲 Generate Fake for this field" },
   ];
 
-  fields.forEach(f => {
-    if(f.key === 'fake') {
-        const item = document.createElement('div');
-        item.className = 'llb-item';
-        item.style.background = '#fff0f0';
-        item.innerHTML = `<strong>${f.label}</strong>`;
-        item.onclick = () => {
-            const type = getFieldType(input);
-            const fake = generateFake(type);
-            if(fake) {
-                smartFill(input, fake);
-                toast(`generated: ${fake}`);
-            } else {
-                toast(`⚠️ Can't fake this type (${type})`);
-            }
-            suggestionBox.remove();
-        };
-        suggestionBox.appendChild(item);
-        return;
+  fields.forEach((f) => {
+    if (f.key === "fake") {
+      const item = document.createElement("div");
+      item.className = "llb-item";
+      item.style.background = "#fff0f0";
+      item.innerHTML = `<strong>${f.label}</strong>`;
+      item.onclick = () => {
+        const type = getFieldType(input);
+        const fake = generateFake(type);
+        if (fake) {
+          smartFill(input, fake);
+          toast(`generated: ${fake}`);
+        } else {
+          toast(`⚠️ Can't fake this type (${type})`);
+        }
+        suggestionBox.remove();
+      };
+      suggestionBox.appendChild(item);
+      return;
     }
 
     if (!data[f.key]) return;
-    
-    let display = data[f.key];
-    if (f.key === 'password') display = '••••••••';
 
-    const item = document.createElement('div');
-    item.className = 'llb-item';
+    let display = data[f.key];
+    if (f.key === "password") display = "••••••••";
+
+    const item = document.createElement("div");
+    item.className = "llb-item";
     item.innerHTML = `<strong>${f.label}</strong><small>${display}</small>`;
     item.onclick = () => {
       smartFill(input, data[f.key]);
@@ -786,11 +999,11 @@ document.addEventListener('focusin', async e => {
     suggestionBox.appendChild(item);
   });
 
-  const reminder = document.createElement('div');
-  reminder.className = 'llb-item';
+  const reminder = document.createElement("div");
+  reminder.className = "llb-item";
   reminder.innerHTML = `<strong>4 clicks anywhere = Fill All</strong>`;
-  reminder.style.background = '#e8f5e8';
-  reminder.style.fontWeight = 'bold';
+  reminder.style.background = "#e8f5e8";
+  reminder.style.fontWeight = "bold";
   suggestionBox.appendChild(reminder);
 
   document.body.appendChild(suggestionBox);
@@ -800,12 +1013,26 @@ document.addEventListener('focusin', async e => {
   suggestionBox.style.left = `${window.scrollX + rect.left}px`;
 });
 
-document.addEventListener('click', e => {
-  if (suggestionBox && !suggestionBox.contains(e.target) && !['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) {
+document.addEventListener("click", (e) => {
+  if (
+    suggestionBox &&
+    !suggestionBox.contains(e.target) &&
+    !["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)
+  ) {
     suggestionBox.remove();
     suggestionBox = null;
   }
 });
 
 // Helper to pause execution
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+
+// ────────────────────────────────
+//  ★★★ ALT + DOUBLE CLICK = FAKEMAIL SWITCHER ★★★
+// ────────────────────────────────
+document.addEventListener('dblclick', (e) => {
+  if (e.altKey) { // Changed to Alt Key
+    chrome.runtime.sendMessage({ type: "ACTIVATE_FAKEMAIL" });
+  }
+});

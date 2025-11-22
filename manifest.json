@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "⚡ Lightning LinkBuilder",
-  "version": "9.0",
+  "version": "9.1",
   "description": "The fastest form filler ever made for link builders & outreach pros",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "action": {
     "default_popup": "popup.html"
   },
