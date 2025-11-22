@@ -1027,12 +1027,10 @@ document.addEventListener("click", (e) => {
 // Helper to pause execution
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-
 // ────────────────────────────────
 //  ★★★ NAVIGATION SHORTCUTS ★★★
 // ────────────────────────────────
-document.addEventListener('dblclick', (e) => {
-  
+document.addEventListener("dblclick", (e) => {
   // 1. Shift + Alt + Double Click -> Converter (NO Refresh)
   if (e.altKey && e.shiftKey) {
     chrome.runtime.sendMessage({ type: "ACTIVATE_CONVERTER" });
@@ -1040,7 +1038,207 @@ document.addEventListener('dblclick', (e) => {
   }
 
   // 2. Alt + Double Click -> Fakemail (Refreshes)
-  if (e.altKey) { 
+  if (e.altKey) {
     chrome.runtime.sendMessage({ type: "ACTIVATE_FAKEMAIL" });
   }
 });
+
+// ============================================================
+// ⚡ MERGED TOOL: TEXT FILLER / LINK CONVERTER LOGIC
+// TRIGGER: Ctrl + Double Right Click (Self-Contained Fix)
+// ============================================================
+(() => {
+  let lastRightClickTime = 0;
+  let currentRightClickTarget = null;
+
+  document.addEventListener(
+    "contextmenu",
+    (e) => {
+      // 1. Must hold CTRL key
+      if (!e.ctrlKey) return;
+
+      const currentTime = new Date().getTime();
+      const timeDiff = currentTime - lastRightClickTime;
+
+      // 2. Double Right Click Logic (< 600ms)
+      if (timeDiff < 600) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        currentRightClickTarget = e.target;
+
+        // VISUAL FEEDBACK: Let user know it worked
+        if (typeof toast === "function") toast("⚡ Opening Text Menu...");
+
+        createOverlayMenu(e.clientX, e.clientY);
+
+        lastRightClickTime = 0;
+      } else {
+        // 3. First Click: Block standard menu so we can wait for the second click
+        e.preventDefault();
+        e.stopPropagation();
+
+        lastRightClickTime = currentTime;
+        removeOverlayMenu();
+      }
+    },
+    true
+  ); // Capture phase to beat other scripts
+
+  // Close menu when clicking elsewhere
+  document.addEventListener("click", (e) => {
+    if (
+      e.target.id !== "qtf-overlay-menu" &&
+      !e.target.className.includes("qtf-item")
+    ) {
+      removeOverlayMenu();
+    }
+  });
+
+  function createOverlayMenu(x, y) {
+    removeOverlayMenu();
+
+    chrome.storage.sync.get(["snippets"], (result) => {
+      const snippets = result.snippets || [];
+      const labels = [
+        "HTML Code",
+        "Markdown Code",
+        "BBCode Code",
+        "Reference Code",
+      ];
+
+      const menu = document.createElement("div");
+      menu.id = "qtf-overlay-menu";
+
+      Object.assign(menu.style, {
+        position: "fixed",
+        top: y + "px",
+        left: x + "px",
+        zIndex: "2147483648" /* One higher than LinkBuilder */,
+        backgroundColor: "#fff",
+        border: "1px solid #aaa",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+        borderRadius: "8px",
+        minWidth: "220px",
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "13px",
+        color: "#333",
+        textAlign: "left",
+        padding: "5px 0",
+      });
+
+      let hasItems = false;
+      snippets.forEach((text, index) => {
+        if (text && text.trim() !== "") {
+          hasItems = true;
+          const item = document.createElement("div");
+          item.className = "qtf-item";
+
+          item.innerHTML = `
+            <div style="font-weight:bold; color:#2ecc71; font-size:11px; margin-bottom:3px;">${
+              labels[index] || "Code"
+            }</div>
+            <div style="color:#555; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 200px;">${escapeHtml(
+              text
+            )}</div>
+          `;
+
+          Object.assign(item.style, {
+            padding: "8px 15px",
+            cursor: "pointer",
+            borderBottom: "1px solid #f0f0f0",
+            background: "#fff",
+            transition: "background 0.1s",
+          });
+
+          item.onmouseenter = () => (item.style.backgroundColor = "#f0fcf0");
+          item.onmouseleave = () => (item.style.backgroundColor = "#fff");
+
+          item.onmousedown = (e) => {
+            e.preventDefault(); // Prevent input blur
+            e.stopPropagation();
+            handleSnippetSelection(text);
+          };
+
+          menu.appendChild(item);
+        }
+      });
+
+      if (!hasItems) {
+        const empty = document.createElement("div");
+        empty.textContent = "⚠️ No snippets saved. Go to popup -> Save.";
+        empty.style.padding = "15px";
+        empty.style.color = "#e74c3c";
+        menu.appendChild(empty);
+      }
+
+      document.body.appendChild(menu);
+
+      // Adjust position if off-screen
+      const rect = menu.getBoundingClientRect();
+      if (rect.right > window.innerWidth)
+        menu.style.left = window.innerWidth - rect.width - 20 + "px";
+      if (rect.bottom > window.innerHeight)
+        menu.style.top = window.innerHeight - rect.height - 20 + "px";
+    });
+  }
+
+  function removeOverlayMenu() {
+    const menu = document.getElementById("qtf-overlay-menu");
+    if (menu) menu.remove();
+  }
+
+  function escapeHtml(text) {
+    if (!text) return "";
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function handleSnippetSelection(text) {
+    removeOverlayMenu();
+
+    // 1. Copy
+    navigator.clipboard.writeText(text).catch((err) => console.log(err));
+
+    if (typeof toast === "function") toast("✅ Copied & Pasted!");
+
+    // 2. Paste
+    if (currentRightClickTarget) {
+      insertSnippetLogic(currentRightClickTarget, text);
+    }
+  }
+
+  function insertSnippetLogic(target, text) {
+    target.focus();
+    const success = document.execCommand("insertText", false, text);
+    if (success) return;
+
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+      const proto =
+        target.tagName === "INPUT"
+          ? window.HTMLInputElement.prototype
+          : window.HTMLTextAreaElement.prototype;
+      const nativeSetter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+
+      if (nativeSetter) nativeSetter.call(target, target.value + text);
+      else target.value += text;
+
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+
+    if (target.isContentEditable || document.designMode === "on") {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+  }
+})();
