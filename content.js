@@ -214,11 +214,15 @@ document.addEventListener('click', async e => {
   clicks = 0;
 
    // MODIFIER COMBINATIONS
-  // We add !e.shiftKey to isSelectMode so it doesn't trigger when you want the new mode
-  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey; 
-  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         
-  const isHardSelectMode = (e.ctrlKey || e.metaKey) && e.shiftKey; // New Hard Mode (Ctrl + Shift)
-  const isRegularFill    = !e.ctrlKey && !e.metaKey && !e.altKey;        // Plain 4 clicks → Normal text fill
+  const isSelectMode     = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey; // Ctrl + 4 clicks
+  const isSubmitMode     = (e.ctrlKey || e.metaKey) && e.altKey;         // Ctrl + Alt + 4 clicks
+  const isHardSelectMode = (e.ctrlKey || e.metaKey) && e.shiftKey;       // Ctrl + Shift + 4 clicks
+  
+  // NEW: Shift + 4 Clicks (Hard Input Mode)
+  const isHardInputMode  = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey; 
+  
+  // Modified: Plain 4 clicks (Regular Fill) - Ensure Shift is NOT held
+  const isRegularFill    = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey; 
 
   const {data} = await getProfileData();
   if (!data || Object.keys(data).length === 0) {
@@ -347,6 +351,46 @@ document.addEventListener('click', async e => {
 
       if (fixedCount > 0) toast(`🧹 Hard Select: Filled ${fixedCount} missed dropdowns!`);
       else toast("✅ All dropdowns appear to be filled.");
+      
+      return; // Stop here
+    }
+
+        // ────────────────────────────────
+    //  ★★★ SHIFT + 4 CLICKS = HARD INPUT (CLEANUP TEXT) ★★★
+    // ────────────────────────────────
+    if (isHardInputMode) {
+      let filledCount = 0;
+      
+      const inputs = document.querySelectorAll('input, textarea');
+      
+      inputs.forEach(el => {
+        // 1. Safety Checks
+        if (el.readOnly || el.disabled || el.type === 'hidden' || el.offsetParent === null) return;
+        const forbiddenTypes = ['submit', 'button', 'image', 'reset', 'file', 'checkbox', 'radio'];
+        if (forbiddenTypes.includes(el.type)) return;
+
+        // 2. Only target EMPTY fields
+        if (el.value && el.value.trim() !== "") return; // Don't overwrite existing work!
+
+        // 3. Determine Value
+        const type = getFieldType(el);
+        let fakeVal = generateFake(type);
+
+        // Fallback if generateFake returns null (e.g., unknown text fields)
+        if (!fakeVal) {
+            if (type === 'email') fakeVal = "info@example.com";
+            else if (type === 'phone') fakeVal = "555-0123";
+            else if (type === 'number') fakeVal = "1";
+            else fakeVal = "N/A"; // Safe fallback for unknown text areas
+        }
+
+        // 4. Force Fill
+        smartFill(el, fakeVal);
+        filledCount++;
+      });
+
+      if (filledCount > 0) toast(`✍️ Hard Fill: Force filled ${filledCount} empty inputs!`);
+      else toast("✅ All text fields appear to be filled.");
       
       return; // Stop here
     }
@@ -648,8 +692,18 @@ document.addEventListener('click', async e => {
       }
     });
 
-    toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes!`);
-  }
+        // ... (smartFill logic above remains the same) ...
+
+    // CHECK FOR EMPTY INPUTS
+    const missedInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea'))
+        .filter(el => !el.disabled && !el.readOnly && el.offsetParent !== null && el.value === "");
+
+    if (missedInputs.length > 0) {
+       toast(`⚡ Filled ${filled} | ${checked} Boxes (⚠️ ${missedInputs.length} empty → Use Shift+Click)`);
+    } else {
+       toast(`⚡ Filled ${filled} Text Fields + ${checked} Boxes!`);
+    }
+  } // End of isRegularFill block
 }, true);
 
 // --- MANUAL CLICK MENU ---
