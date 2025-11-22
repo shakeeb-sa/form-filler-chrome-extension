@@ -1029,10 +1029,18 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 
 // ────────────────────────────────
-//  ★★★ ALT + DOUBLE CLICK = FAKEMAIL SWITCHER ★★★
+//  ★★★ NAVIGATION SHORTCUTS ★★★
 // ────────────────────────────────
 document.addEventListener('dblclick', (e) => {
-  if (e.altKey) { // Changed to Alt Key
+  
+  // 1. Shift + Alt + Double Click -> Converter (NO Refresh)
+  if (e.altKey && e.shiftKey) {
+    chrome.runtime.sendMessage({ type: "ACTIVATE_CONVERTER" });
+    return; // Stop here so we don't trigger the other one
+  }
+
+  // 2. Alt + Double Click -> Fakemail (Refreshes)
+  if (e.altKey) { 
     chrome.runtime.sendMessage({ type: "ACTIVATE_FAKEMAIL" });
   }
 });
