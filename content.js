@@ -1247,29 +1247,98 @@ document.addEventListener("dblclick", (e) => {
     }
   });
 
+  // --- CONVERSION ENGINES ---
+
+  function toMarkdown(html) {
+    let temp = document.createElement("div");
+    temp.innerHTML = html;
+    temp
+      .querySelectorAll("a")
+      .forEach((a) => a.replaceWith(`[${a.textContent}](${a.href})`));
+    temp
+      .querySelectorAll("b, strong")
+      .forEach((b) => b.replaceWith(`**${b.textContent}**`));
+    temp
+      .querySelectorAll("i, em")
+      .forEach((i) => i.replaceWith(`*${i.textContent}*`));
+    let text = temp.innerHTML.replace(/<br\s*\/?>/gi, "\n");
+    return text.replace(/<[^>]+>/g, "").trim();
+  }
+
+  function toReferenceMarkdown(html) {
+    let temp = document.createElement("div");
+    temp.innerHTML = html;
+    let refs = [];
+    let counter = 1;
+
+    temp.querySelectorAll("a").forEach((a) => {
+      const currentRef = counter++;
+      a.replaceWith(`[${a.textContent}][${currentRef}]`);
+      refs.push(`[${currentRef}]: ${a.href}`);
+    });
+
+    temp
+      .querySelectorAll("b, strong")
+      .forEach((b) => b.replaceWith(`**${b.textContent}**`));
+    temp
+      .querySelectorAll("i, em")
+      .forEach((i) => i.replaceWith(`*${i.textContent}*`));
+
+    let body = temp.innerHTML
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+
+    if (refs.length > 0) return body + "\n\n" + refs.join("\n");
+    return body;
+  }
+
+  function toBBCode(html) {
+    let temp = document.createElement("div");
+    temp.innerHTML = html;
+    temp
+      .querySelectorAll("a")
+      .forEach((a) => a.replaceWith(`[url=${a.href}]${a.textContent}[/url]`));
+    temp
+      .querySelectorAll("b, strong")
+      .forEach((b) => b.replaceWith(`[b]${b.textContent}[/b]`));
+    temp
+      .querySelectorAll("i, em")
+      .forEach((i) => i.replaceWith(`[i]${i.textContent}[/i]`));
+    let text = temp.innerHTML.replace(/<br\s*\/?>/gi, "\n");
+    return text.replace(/<[^>]+>/g, "").trim();
+  }
+
+  // --- UPGRADED MENU FUNCTION ---
   function createOverlayMenu(x, y) {
     removeOverlayMenu();
 
-    chrome.storage.sync.get(["snippets", "masterHTML"], (result) => {
-      const snippets = result.snippets || [];
-      const master = result.masterHTML;
+    chrome.storage.sync.get(["masterHTML"], (result) => {
+      const master = result.masterHTML || "";
 
-      let itemsToRender = snippets.map((txt, idx) => ({
-        text: txt,
-        label:
-          ["HTML Code", "Markdown Code", "BBCode Code", "Reference Code"][
-            idx
-          ] || "Code",
-        isRich: false,
-      }));
-
-      if (master) {
-        itemsToRender.push({
-          text: master,
-          label: "⭐ Original / Rich Text",
-          isRich: true,
-        });
+      if (!master) {
+        if (typeof toast === "function")
+          toast("⚠️ No Source HTML found. Save in Popup first.");
+        return;
       }
+
+      // ⚡ CLEAN HTML (Removes <p> at start and </p> at end)
+      const htmlClean = master
+        .replace(/^\s*<p[^>]*>/i, "") // Remove opening <p>
+        .replace(/<\/p>\s*$/i, ""); // Remove closing </p>
+
+      // ⚡ GENERATE CONVERSIONS
+      const markdown = toMarkdown(master);
+      const bbcode = toBBCode(master);
+      const reference = toReferenceMarkdown(master);
+
+      const itemsToRender = [
+        { text: htmlClean, label: "HTML Code (Clean)", isRich: false }, // <--- FIXED
+        { text: markdown, label: "Markdown (Inline)", isRich: false },
+        { text: bbcode, label: "BBCode", isRich: false },
+        { text: reference, label: "Markdown (Reference Style)", isRich: false },
+        { text: master, label: "⭐ Original / Rich Text", isRich: true },
+      ];
 
       const menu = document.createElement("div");
       menu.id = "qtf-overlay-menu";
@@ -1283,7 +1352,7 @@ document.addEventListener("dblclick", (e) => {
         border: "1px solid #aaa",
         boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
         borderRadius: "8px",
-        minWidth: "220px",
+        minWidth: "250px",
         fontFamily: "Segoe UI, sans-serif",
         fontSize: "13px",
         color: "#333",
@@ -1291,60 +1360,47 @@ document.addEventListener("dblclick", (e) => {
         padding: "5px 0",
       });
 
-      let hasItems = false;
       itemsToRender.forEach((item) => {
-        if (item.text && item.text.trim() !== "") {
-          hasItems = true;
-          const menuEl = document.createElement("div");
-          menuEl.className = "qtf-item";
+        const menuEl = document.createElement("div");
+        menuEl.className = "qtf-item";
 
-          let previewText = item.text;
-          if (item.isRich) {
-            const temp = document.createElement("div");
-            temp.innerHTML = item.text;
-            previewText = temp.textContent || item.text;
-          }
-
-          menuEl.innerHTML = `
-            <div style="font-weight:bold; color:${
-              item.isRich ? "#e67e22" : "#2ecc71"
-            }; font-size:11px; margin-bottom:3px;">
-                ${item.label}
-            </div>
-            <div style="color:#555; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 200px;">
-                ${escapeHtml(previewText)}
-            </div>
-          `;
-
-          Object.assign(menuEl.style, {
-            padding: "8px 15px",
-            cursor: "pointer",
-            borderBottom: "1px solid #f0f0f0",
-            background: "#fff",
-            transition: "background 0.1s",
-          });
-
-          menuEl.onmouseenter = () =>
-            (menuEl.style.backgroundColor = "#f0fcf0");
-          menuEl.onmouseleave = () => (menuEl.style.backgroundColor = "#fff");
-
-          menuEl.onmousedown = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSnippetSelection(item.text, item.isRich);
-          };
-
-          menu.appendChild(menuEl);
+        let previewText = item.text;
+        if (item.isRich) {
+          const temp = document.createElement("div");
+          temp.innerHTML = item.text;
+          previewText = temp.textContent || item.text;
         }
-      });
 
-      if (!hasItems) {
-        const empty = document.createElement("div");
-        empty.textContent = "⚠️ No snippets saved. Go to popup -> Save.";
-        empty.style.padding = "15px";
-        empty.style.color = "#e74c3c";
-        menu.appendChild(empty);
-      }
+        menuEl.innerHTML = `
+        <div style="font-weight:bold; color:${
+          item.isRich ? "#e67e22" : "#2ecc71"
+        }; font-size:11px; margin-bottom:3px;">
+            ${item.label}
+        </div>
+        <div style="color:#555; font-size:12px; font-family: monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 230px;">
+            ${escapeHtml(previewText)}
+        </div>
+      `;
+
+        Object.assign(menuEl.style, {
+          padding: "8px 15px",
+          cursor: "pointer",
+          borderBottom: "1px solid #f0f0f0",
+          background: "#fff",
+          transition: "background 0.1s",
+        });
+
+        menuEl.onmouseenter = () => (menuEl.style.backgroundColor = "#f0fcf0");
+        menuEl.onmouseleave = () => (menuEl.style.backgroundColor = "#fff");
+
+        menuEl.onmousedown = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSnippetSelection(item.text, item.isRich);
+        };
+
+        menu.appendChild(menuEl);
+      });
 
       document.body.appendChild(menu);
 
