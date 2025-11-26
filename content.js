@@ -1499,3 +1499,197 @@ document.addEventListener("dblclick", (e) => {
     }
   }
 })();
+
+// ============================================================
+// 🚀 SMART URL SWAPPER (Profile Collision Check)
+// ============================================================
+(async function initUrlSwapper() {
+  // 1. Get User Data
+  const { data } = await getProfileData();
+  const myUsername = data.username; // Ensure this key matches your storage key
+
+  if (!myUsername) return; // No username saved? Do nothing.
+
+  // 2. Parse Current URL
+  const path = window.location.pathname; // e.g., "/user/motobuys"
+  const segments = path.split("/").filter((s) => s.length > 0); // ["user", "motobuys"]
+
+  // 3. Logic: Identify the "Suspect" Username in the URL
+  let suspectIndex = -1;
+  let mode = "none";
+
+  // TIER 1: Common Prefix Paths
+  const profilePrefixes = [
+    "user",
+    "users",
+    "u",
+    "profile",
+    "profiles",
+    "p",
+    "member",
+    "members",
+    "author",
+    "account",
+    "channel",
+    "c",
+    "id",
+  ];
+
+  // Check if the *second to last* segment is a prefix (e.g. /u/name)
+  if (segments.length >= 2) {
+    const secondLast = segments[segments.length - 2].toLowerCase();
+    if (profilePrefixes.includes(secondLast)) {
+      suspectIndex = segments.length - 1; // The last part is the username
+      mode = "prefix";
+    }
+  }
+
+  // TIER 2: The "@" Syntax (e.g. /@motobuys)
+  if (segments.length > 0 && suspectIndex === -1) {
+    const last = segments[segments.length - 1];
+    if (last.startsWith("@")) {
+      suspectIndex = segments.length - 1;
+      mode = "at";
+    }
+  }
+
+  // TIER 3: Root Level (e.g. /motobuys) - The "Ignore List" Strategy
+  if (segments.length === 1 && suspectIndex === -1) {
+    const potentialUser = segments[0].toLowerCase();
+
+    // Words that are DEFINITELY NOT usernames
+    const ignoreList = [
+      "about",
+      "contact",
+      "terms",
+      "privacy",
+      "help",
+      "support",
+      "login",
+      "signin",
+      "signup",
+      "register",
+      "search",
+      "explore",
+      "home",
+      "index",
+      "category",
+      "shop",
+      "cart",
+      "checkout",
+      "blog",
+      "news",
+      "articles",
+      "features",
+      "pricing",
+      "plans",
+      "api",
+      "dev",
+      "jobs",
+      "careers",
+      "sitemap",
+      "robots",
+    ];
+
+    if (!ignoreList.includes(potentialUser)) {
+      suspectIndex = 0;
+      mode = "root";
+    }
+  }
+
+  // 4. Evaluate & Act
+  if (suspectIndex !== -1) {
+    const currentSuspect = segments[suspectIndex];
+
+    // Clean logic: Remove "@" if checking an @-style URL
+    const cleanSuspect = currentSuspect.startsWith("@")
+      ? currentSuspect.substring(1)
+      : currentSuspect;
+    const cleanMyUser = myUsername.startsWith("@")
+      ? myUsername.substring(1)
+      : myUsername;
+
+    // STOP if:
+    // 1. We are already on our own page (collision avoided)
+    // 2. The suspect is ridiculously long (probably a blog post slug, not a user)
+    if (cleanSuspect.toLowerCase() === cleanMyUser.toLowerCase()) return;
+    if (cleanSuspect.length > 40) return;
+
+    // 5. Create the New URL
+    const newSegments = [...segments];
+    // Preserve the "@" if the site uses it
+    newSegments[suspectIndex] = (mode === "at" ? "@" : "") + cleanMyUser;
+    const newPath = "/" + newSegments.join("/");
+    const targetUrl = window.location.origin + newPath + window.location.search;
+
+    // 6. Show the UI (Non-intrusive Button)
+    createSwapButton(cleanMyUser, targetUrl);
+  }
+
+  function createSwapButton(user, url) {
+    const btn = document.createElement("div");
+    btn.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">⚡</span>
+        <div style="display:flex; flex-direction:column; line-height:1.2;">
+          <span style="font-size:10px; opacity:0.8; color:#ccc;">CHECK PROFILE</span>
+          <span style="font-weight:bold; color:white;">Go to /${user}?</span>
+        </div>
+      </div>
+    `;
+
+    Object.assign(btn.style, {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      zIndex: "2147483647",
+      background: "#2d3436",
+      color: "white",
+      padding: "10px 16px",
+      borderRadius: "8px",
+      boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+      cursor: "pointer",
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "13px",
+      transition: "transform 0.2s, opacity 0.2s",
+      border: "1px solid #444",
+    });
+
+    // Hover Effect
+    btn.onmouseenter = () => (btn.style.transform = "translateY(-2px)");
+    btn.onmouseleave = () => (btn.style.transform = "translateY(0)");
+
+    // Click Action
+    btn.onclick = () => {
+      btn.innerHTML = "🚀 Switching...";
+      window.location.href = url;
+    };
+
+    // Close Button (X)
+    const close = document.createElement("span");
+    close.innerHTML = "&times;";
+    Object.assign(close.style, {
+      position: "absolute",
+      top: "-8px",
+      left: "-8px",
+      background: "#d63031",
+      color: "white",
+      width: "18px",
+      height: "18px",
+      borderRadius: "50%",
+      textAlign: "center",
+      lineHeight: "16px",
+      fontSize: "14px",
+      cursor: "pointer",
+      fontWeight: "bold",
+      boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+    });
+    close.onclick = (e) => {
+      e.stopPropagation();
+      btn.remove();
+    };
+
+    btn.appendChild(close);
+    document.body.appendChild(btn);
+  }
+})();
