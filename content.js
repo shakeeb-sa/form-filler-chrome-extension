@@ -1693,3 +1693,174 @@ document.addEventListener("dblclick", (e) => {
     document.body.appendChild(btn);
   }
 })();
+
+// ============================================================
+// 🚪 THE GATEWAY HUNTER (Alt + G)
+// Brute Force Menu for Login, Register, Admin, and Account pages
+// ============================================================
+document.addEventListener("keydown", (e) => {
+  // Trigger: Alt + G
+  if (e.altKey && e.code === "KeyG") {
+    e.preventDefault();
+    createGatewayMenu();
+  }
+});
+
+function createGatewayMenu() {
+  // 1. Clean up existing menu if open
+  const existing = document.getElementById("llb-gateway-menu");
+  if (existing) {
+    existing.remove();
+    return;
+  }
+
+  // 2. Define the Paths (The Intelligence)
+  const origin = window.location.origin; // e.g., https://example.com
+
+  const gateways = {
+    "🚀 Register / Join": [
+      "/register",
+      "/signup",
+      "/sign-up",
+      "/join",
+      "/create-account",
+      "/start",
+      "/register.php",
+      "/register.html",
+    ],
+    "🔑 Login / Auth": [
+      "/login",
+      "/signin",
+      "/sign-in",
+      "/auth/login",
+      "/user/login",
+    ],
+    "👤 Account / Dash": [
+      "/account",
+      "/my-account",
+      "/account/my-account",
+      "/dashboard",
+      "/user",
+      "/profile",
+    ],
+    "🛠️ Admin / Backend": [
+      "/wp-admin",
+      "/admin",
+      "/administrator",
+      "/backend",
+      "/employer-panel",
+    ],
+    "📝 Submit / Post": ["/submit", "/post-ad", "/add-listing", "/submit-url"],
+  };
+
+  // 3. Build the UI
+  const menu = document.createElement("div");
+  menu.id = "llb-gateway-menu";
+
+  // Styling
+  Object.assign(menu.style, {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: "450px",
+    maxHeight: "80vh",
+    backgroundColor: "#1e272e", // Dark theme for contrast
+    color: "#fff",
+    borderRadius: "12px",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+    zIndex: "2147483647",
+    padding: "25px",
+    fontFamily: "-apple-system, system-ui, sans-serif",
+    overflowY: "auto",
+    border: "1px solid #485460",
+  });
+
+  // Header
+  const header = document.createElement("div");
+  header.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <span style="font-size:20px; font-weight:bold; color:#00d2d3;">🚪 Gateway Hunter</span>
+      <span id="llb-gw-close" style="cursor:pointer; font-size:24px; opacity:0.7;">&times;</span>
+    </div>
+    <div style="font-size:12px; color:#ccc; margin-bottom:15px;">
+      Targeting: <span style="color:#fff; font-weight:bold;">${origin}</span>
+    </div>
+  `;
+  menu.appendChild(header);
+
+  // Generate Buttons per Category
+  for (const [category, paths] of Object.entries(gateways)) {
+    const section = document.createElement("div");
+    section.style.marginBottom = "15px";
+
+    const title = document.createElement("div");
+    title.textContent = category;
+    title.style.cssText =
+      "font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#808e9b; margin-bottom:8px; font-weight:bold;";
+    section.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.style.cssText =
+      "display:grid; grid-template-columns: 1fr 1fr; gap:8px;";
+
+    paths.forEach((path) => {
+      const btn = document.createElement("button");
+      btn.textContent = path;
+      Object.assign(btn.style, {
+        background: "#353b48",
+        border: "none",
+        color: "#dcdde1",
+        padding: "8px 12px",
+        borderRadius: "6px",
+        cursor: "pointer",
+        textAlign: "left",
+        fontSize: "13px",
+        transition: "all 0.1s",
+      });
+
+      btn.onmouseenter = () => {
+        btn.style.background = "#00d2d3";
+        btn.style.color = "#000";
+      };
+      btn.onmouseleave = () => {
+        btn.style.background = "#353b48";
+        btn.style.color = "#dcdde1";
+      };
+
+      btn.onclick = () => {
+        menu.remove();
+        toast(`🚀 Jumping to ${path}...`);
+        window.location.href = origin + path;
+      };
+
+      grid.appendChild(btn);
+    });
+
+    section.appendChild(grid);
+    menu.appendChild(section);
+  }
+
+  // 4. Close Logic
+  menu.querySelector("#llb-gw-close").onclick = () => menu.remove();
+
+  // Close on click outside
+  const backdrop = document.createElement("div");
+  Object.assign(backdrop.style, {
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    background: "rgba(0,0,0,0.3)",
+    zIndex: "2147483646",
+    backdropFilter: "blur(2px)",
+  });
+  backdrop.onclick = () => {
+    menu.remove();
+    backdrop.remove();
+  };
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(menu);
+}
